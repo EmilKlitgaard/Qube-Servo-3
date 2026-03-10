@@ -1,0 +1,110 @@
+<?xml version="1.0"?>
+<!--
+  Quanser QUBE-Servo 3 URDF
+  ============================================================
+  Physical parameters from the Quanser QUBE-Servo 3 Student Workbook.
+
+  Motor / Electrical
+    Rm  = 8.4      Ω           Motor terminal resistance
+    Km  = 0.042    V·s/rad     Back-EMF constant
+    Kt  = 0.042    Nm/A        Motor torque constant  (Km = Kt for SI)
+    Lm  = 1.16e-3  H           Armature inductance (usually neglected)
+
+  Mechanical
+    Jm  = 4.0e-6   kg·m²       Motor rotor moment of inertia
+    Jd  = 6.4e-6   kg·m²       Aluminium disc moment of inertia
+    Jeq = Jm + Jd = 10.4e-6 kg·m²   Total (Kg=1, direct drive)
+    Beq = 0.0      Nm·s/rad    Equivalent viscous damping (nominally zero)
+
+  Disc geometry inferred from Jd = ½·m·r²  with m_disc = 0.053 kg
+    → r = √(2·Jd / m) = √(2·6.4e-6 / 0.053) ≈ 0.01554 m  (~31 mm dia.)
+    → h = 0.003 m  (3 mm thick)
+
+  Body
+    Approximate exterior: 100 mm × 100 mm × 75 mm, mass ≈ 0.450 kg
+-->
+
+<robot name="qube_servo_3">
+
+  <!-- ================================================================
+       Link 1 – Base body (fixed housing)
+       Box: 100 mm × 100 mm × 75 mm
+       Inertia (solid box):
+         Ixx = Iyy = m/12·(h²+d²) = 0.450/12·(0.075²+0.100²) = 5.859e-4
+         Izz       = m/12·(w²+d²) = 0.450/12·(0.100²+0.100²) = 7.500e-4
+       ================================================================ -->
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 0.0375" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.100 0.100 0.075"/>
+      </geometry>
+      <material name="dark_grey">
+        <color rgba="0.25 0.25 0.25 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.0375" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.100 0.100 0.075"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 0.0375" rpy="0 0 0"/>
+      <mass value="0.450"/>
+      <inertia ixx="5.859e-4" iyy="5.859e-4" izz="7.500e-4"
+               ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+
+  <!-- ================================================================
+       Link 2 – Rotor  (aluminium disc + motor rotor, combined)
+       Visual: cylinder  r = 0.01554 m,  h = 0.003 m
+       Mass:  m_disc = 0.053 kg  (motor-rotor mass ~0.015 kg neglected here)
+       Inertia:
+         Izz = Jm + Jd = 4.0e-6 + 6.4e-6 = 10.4e-6  (total rotating J)
+         Ixx = Iyy = m/12·(3r² + h²)
+                   = 0.053/12·(3·2.415e-4 + 9.0e-6)  = 3.239e-6
+       ================================================================ -->
+  <link name="rotor">
+    <visual>
+      <origin xyz="0 0 0.0015" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.01554" length="0.003"/>
+      </geometry>
+      <material name="aluminium">
+        <color rgba="0.75 0.75 0.80 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.0015" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.01554" length="0.003"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 0.0015" rpy="0 0 0"/>
+      <mass value="0.053"/>
+      <!-- Izz includes Jm (4.0e-6) + Jd (6.4e-6) = 10.4e-6 kg·m² -->
+      <inertia ixx="3.239e-6" iyy="3.239e-6" izz="10.4e-6"
+               ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+
+  <!-- ================================================================
+       Joint – motor_joint
+       Continuous rotation about Z-axis.
+       Origin at the top face of the base body (z = 0.075 m).
+       Effort limit: ±18 V equivalent (amplifier rail).
+       Beq ≈ 0 from datasheet.
+       ================================================================ -->
+  <joint name="motor_joint" type="continuous">
+    <parent link="base_link"/>
+    <child  link="rotor"/>
+    <origin xyz="0 0 0.075" rpy="0 0 0"/>
+    <axis   xyz="0 0 1"/>
+    <dynamics damping="0.0" friction="0.0"/>
+    <limit  effort="18.0" velocity="100.0"/>
+  </joint>
+
+</robot>

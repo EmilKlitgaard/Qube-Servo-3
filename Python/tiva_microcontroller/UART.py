@@ -25,7 +25,7 @@ class UART:
                 print("Close any other program using the port (e.g. another terminal, IDE serial monitor).")
             else:
                 print(f"Error opening port '{port}': {e}")
-            raise SystemExit(1)
+            raise 
         self.last_data = None
         if config.DEBUG: print("[UART class initialized]\n")
 
