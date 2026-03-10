@@ -1,11 +1,11 @@
 import threading
 import time
 
-from Config import Config
 from tiva_microcontroller.UART import UART
+from Config import config
 
 # UART thread
-def uart_loop(config, uart, stop_event):
+def uart_loop(uart, stop_event):
     print("[Thread] started new thread:", threading.current_thread().name)
 
     while not stop_event.is_set():
@@ -24,14 +24,12 @@ def uart_loop(config, uart, stop_event):
 
     print("[Thread] UART stopped")
 
-
 # main thread
 def main():
     print("Starting on main thread:", threading.current_thread().name)
 
     # Configuration and init objects
-    config = Config()
-    uart = UART(config.port, config.baudrate)
+    uart = UART(config.UART_PORT, config.UART_BAUDRATE)
 
     # Event to signal thread to stop
     stop_event = threading.Event()
@@ -39,7 +37,7 @@ def main():
     # Start uart thread
     thread = threading.Thread(
         target=uart_loop,
-        args=(config, uart, stop_event),
+        args=(uart, stop_event),
         name="UARTThread",
         daemon=True
     )

@@ -1,12 +1,10 @@
 import serial
 import serial.tools.list_ports
 
-from Config import Config
+from Config import config
 
 class UART:
     def __init__(self, port: str, baudrate: int = 19200, data_bits: int = 8, parity: str = 'N', stop_bits: int = 1, timeout: float = 1.0):
-        config = Config()
-
         print(f"Connecting to UART port '{port}' with {baudrate} baud...")
         try:
             self.serial = serial.Serial(

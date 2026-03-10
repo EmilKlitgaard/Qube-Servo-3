@@ -1,5 +1,5 @@
 DEBUG: true
 
 UART:
-  port: /dev/cu.usbmodem0E2208FC1
-  baudrate: 19200
+  PORT: /dev/cu.usbmodem0E2208FC1
+  BAUDRATE: 19200

@@ -1,18 +1,35 @@
 import yaml
+import os
 
 class Config:
-    # Import YAML variables on objct init
-    def __init__(self) -> None:
-        with open('Config.yaml', 'r') as file:
-            self.config = yaml.safe_load(file)
+    _instance = None
 
-        # Go through all variables in self.config and set them as attributes
-        for section, params in self.config.items():
+    # Singleton pattern: only one instance of Config will exist, and it will be shared across all imports.
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._load()
+        return cls._instance
+
+    # Load configuration from Config.yaml and set attributes
+    def _load(self):
+        yaml_path = os.path.join(os.path.dirname(__file__), 'Config.yaml')
+        with open(yaml_path, 'r') as file:
+            data = yaml.safe_load(file)
+
+        # Flat keys (e.g. DEBUG) become attributes directly.
+        # Nested sections (e.g. UART.PORT) become SECTION_KEY (e.g. UART_PORT).
+        for section, params in data.items():
             if isinstance(params, dict):
                 for var, value in params.items():
-                    setattr(self, var, value)
-                    if self.DEBUG: print(f"Set attribute: {var} = {value}")
+                    setattr(self, f"{section}_{var}", value)
             else:
                 setattr(self, section, params)
-                if self.DEBUG: print(f"Set attribute: {section} = {params}")
-        if self.DEBUG: print(f"[Config class initialized]\n")
+
+        if self.DEBUG:
+            for key, value in vars(self).items():
+                print(f"[Config] {key} = {value}")
+            print()
+
+# Global — import this anywhere: `from Config import config`
+config = Config()
