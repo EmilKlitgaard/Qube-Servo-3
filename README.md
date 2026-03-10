@@ -1,6 +1,6 @@
+# Quanser Qube Servo 3
 <img src="Images/Qube_servo_3.png" width="100%">
 
-# Quanser Qube Servo 3
 ## General
 - ???
 
