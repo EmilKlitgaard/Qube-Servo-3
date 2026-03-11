@@ -1,12 +1,10 @@
 from abc import ABC, abstractmethod
 
-
 class QubeInterface(ABC):
     """
     Abstract interface for the Quanser QUBE-Servo 3.
 
-    Both Physical and Virtual implement every method identically so they
-    are drop-in replacements for each other.
+    Both Physical and Virtual implement every method identically so they are drop-in replacements for each other.
 
     Typical usage
     -------------
@@ -15,13 +13,12 @@ class QubeInterface(ABC):
         qube.set_led(0, 1, 0)
         qube.enable(True)
         while running:
-            theta, theta_dot = qube.read()
-            voltage = my_controller(theta, theta_dot)
+            theta, theta_dot, alpha, alpha_dot = qube.read()
+            voltage = my_controller(theta, theta_dot, alpha, alpha_dot)
             qube.write(voltage)
     """
 
     # ── context manager support ────────────────────────────────────────────────
-
     def __enter__(self):
         self.open()
         return self
@@ -30,7 +27,6 @@ class QubeInterface(ABC):
         self.close()
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
-
     @abstractmethod
     def open(self) -> None:
         """Open / initialise the hardware or simulator."""
@@ -40,7 +36,6 @@ class QubeInterface(ABC):
         """Shut down cleanly — zero voltage, release all resources."""
 
     # ── initialisation helpers ─────────────────────────────────────────────────
-
     @abstractmethod
     def reset(self) -> None:
         """Zero encoder counts (Physical) or simulation state (Virtual)."""
@@ -61,16 +56,17 @@ class QubeInterface(ABC):
         """Enable (True) or disable (False) the motor amplifier."""
 
     # ── control loop ──────────────────────────────────────────────────────────
-
     @abstractmethod
-    def read(self) -> tuple[float, float]:
+    def read(self) -> tuple[float, float, float, float]:
         """
         Sample the current state.
 
         Returns
         -------
-        theta     : float   Motor shaft angle [rad]
-        theta_dot : float   Motor shaft angular velocity [rad/s]
+        theta     : float   Arm angle                      [rad]
+        theta_dot : float   Arm angular velocity           [rad/s]
+        alpha     : float   Pendulum angle (0=down, π=up)  [rad]
+        alpha_dot : float   Pendulum angular velocity      [rad/s]
         """
 
     @abstractmethod

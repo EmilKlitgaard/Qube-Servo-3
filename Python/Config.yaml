@@ -6,5 +6,6 @@ UART:
 
 QUBE:
   SIMULATION: true
-  KP: 10.0
-  KD: 0.00000000000001
+  KP: 0.5
+  KD: 0.1
+  SIMULATION_SPEED: 1  # 1.0 = real time, 0.5 = half speed

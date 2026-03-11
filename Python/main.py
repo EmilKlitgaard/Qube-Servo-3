@@ -1,10 +1,10 @@
 import threading
 import time
-import math
 
 from tiva_microcontroller.UART import UART
 from platform import Physical, Virtual
 from Config import config
+from controller.Controller import PendulumController
 
 # UART thread
 def uart_loop(uart, stop_event):
@@ -57,20 +57,20 @@ def main():
     try:
         if config.QUBE_SIMULATION:
             if config.DEBUG: print("Using Virtual QUBE-Servo 3 (simulation)")
-            qube = Virtual()
+            qube = Virtual(speed=config.QUBE_SIMULATION_SPEED)
         else:
             if config.DEBUG: print("Using Physical QUBE-Servo 3 (hardware)")
             qube = Physical()
 
-        target = math.radians(90.0)
+        ctrl = PendulumController()
         with qube:
+            input("\nPress ENTER to start control loop...") # Await for enter to start control loop
             qube.reset()
             qube.set_led(0, 1, 0)
             qube.enable(True)
             try:
                 while True:
-                    theta, theta_dot = qube.read()
-                    voltage = config.QUBE_KP * (target - theta) - config.QUBE_KD * theta_dot
+                    voltage = ctrl.step(*qube.read())
                     qube.write(voltage)
             except KeyboardInterrupt:
                 print("\nStopped.")
