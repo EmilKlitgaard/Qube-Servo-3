@@ -1,4 +1,6 @@
 # NOTE: quanser must be installed separately via the Quanser Python SDK / QUARC installer
 pyserial
 numpy
+scipy
 pyyaml
+matplotlib

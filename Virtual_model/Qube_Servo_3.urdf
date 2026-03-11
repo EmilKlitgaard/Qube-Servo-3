@@ -1,0 +1,196 @@
+<?xml version="1.0"?>
+<!--
+  Quanser QUBE-Servo 3 — Rotary Inverted Pendulum
+  ============================================================
+  Kinematic layout
+  ─────────────────
+    world (fixed)
+      └── base_link          square housing box, motor inside
+           └── motor_joint   revolute · Z-axis (vertical) · motor-driven
+                └── arm_link horizontal rotary arm
+                     └── pendulum_joint   revolute · Y-axis (horizontal,
+                                          perpendicular to arm) · passive
+                          └── pendulum_link   rod, hangs downward at rest
+
+  Coordinate convention
+  ─────────────────────
+    Z  – up
+    X  – initial arm direction (motor at origin, arm tip at +X)
+    Y  – axis about which pendulum swings
+
+  Physical parameters  (Quanser QUBE-Servo 3 Student Workbook)
+  ──────────────────────────────────────────────────────────────
+  Motor / Electrical
+    Rm  = 8.4      Ω           terminal resistance
+    Km  = 0.042    V·s/rad     back-EMF constant
+    Kt  = 0.042    Nm/A        torque constant  (Km = Kt in SI)
+    Jm  = 4.0e-6   kg·m²       motor rotor inertia
+
+  Rotary arm
+    Lr  = 0.085    m           pivot-to-pivot length
+    Mr  = 0.095    kg          arm mass
+    Jr  = Mr·Lr²/12 = 5.72e-5 kg·m²   (thin rod, axis ⊥ length)
+
+  Pendulum
+    Lp  = 0.129    m           full rod length
+    Mp  = 0.024    kg          pendulum mass
+    Jp  = Mp·Lp²/12 = 3.33e-5 kg·m²   (thin rod, axis ⊥ length)
+
+  Housing
+    ~90 × 90 × 90 mm,  mass ≈ 0.450 kg  (body + motor + electronics)
+
+  STL meshes
+  ──────────
+  When you have the STL files, place them in  Virtual_model/  then
+  replace each <geometry><box …/></geometry> block with:
+      <geometry>
+        <mesh filename="package://Virtual_model/<filename>.stl"
+              scale="0.001 0.001 0.001"/>
+      </geometry>
+  Commented-out <mesh> lines below mark exactly where to do this.
+-->
+
+<robot name="qube_servo_3_pendulum">
+
+  <!-- ── world anchor ─────────────────────────────────────────────────────── -->
+  <link name="world"/>
+
+  <joint name="world_to_base" type="fixed">
+    <parent link="world"/>
+    <child  link="base_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ════════════════════════════════════════════════════════════════════════
+       base_link — QUBE housing  (90 × 90 × 90 mm)
+       Inertia (solid cube, a = 0.090 m, m = 0.450 kg):
+         Ixx = Iyy = Izz = m/6·a² = 0.450/6·8.1e-3 = 6.075e-4  kg·m²
+       ════════════════════════════════════════════════════════════════════════ -->
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 0.045" rpy="0 0 0"/>
+      <geometry>
+        <!-- STL: <mesh filename="package://Virtual_model/Body.stl" scale="0.001 0.001 0.001"/> -->
+        <box size="0.090 0.090 0.090"/>
+      </geometry>
+      <material name="dark_grey">
+        <color rgba="0.22 0.22 0.22 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.045" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.090 0.090 0.090"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 0.045" rpy="0 0 0"/>
+      <mass value="0.450"/>
+      <inertia ixx="6.075e-4" iyy="6.075e-4" izz="6.075e-4"
+               ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+
+  <!-- ════════════════════════════════════════════════════════════════════════
+       motor_joint  — revolute, vertical Z-axis
+       Origin at the top face of the housing (z = 0.090 m), on shaft centreline.
+       Drives the rotary arm; defines motor angle θ.
+       Arm home = π rad (180°).  Travel limited to ±90° from home:
+         lower = π/2  (90°)   upper = 3π/2 (270°)  in world frame.
+       URDF lower/upper are expressed relative to the joint zero (arm at +X = 0 rad),
+       so lower = 1.5708 (π/2), upper = 4.7124 (3π/2).
+       Effort limit = amplifier rail ±18 V equivalent.
+       ════════════════════════════════════════════════════════════════════════════ -->
+  <joint name="motor_joint" type="revolute">
+    <parent link="base_link"/>
+    <child  link="arm_link"/>
+    <origin xyz="0 0 0.090" rpy="0 0 0"/>
+    <axis   xyz="0 0 1"/>
+    <dynamics damping="0.0" friction="0.0"/>
+    <limit lower="1.5708" upper="4.7124" effort="18.0" velocity="100.0"/>
+  </joint>
+
+  <!-- ════════════════════════════════════════════════════════════════════════
+       arm_link — aluminium rotary arm  (85 × 10 × 6 mm,  Mr = 0.095 kg)
+       CoM at (Lr/2, 0, 0) = (0.0425, 0, 0) from motor_joint origin.
+       Inertia at CoM (thin box, l=0.085, w=0.010, h=0.006):
+         Ixx = m/12·(w²+h²) = 0.095/12·(1.0e-4+3.6e-5) = 1.08e-6
+         Iyy = m/12·(l²+h²) = 0.095/12·(7.225e-3+3.6e-5) = 5.76e-5
+         Izz = m/12·(l²+w²) = 0.095/12·(7.225e-3+1.0e-4) = 5.79e-5
+       ════════════════════════════════════════════════════════════════════════ -->
+  <link name="arm_link">
+    <visual>
+      <origin xyz="0.0425 0 0" rpy="0 0 0"/>
+      <geometry>
+        <!-- STL: <mesh filename="package://Virtual_model/Motor.stl" scale="0.001 0.001 0.001"/> -->
+        <box size="0.085 0.010 0.006"/>
+      </geometry>
+      <material name="aluminium">
+        <color rgba="0.78 0.78 0.78 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.0425 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.085 0.010 0.006"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0.0425 0 0" rpy="0 0 0"/>
+      <mass value="0.095"/>
+      <inertia ixx="1.08e-6" iyy="5.76e-5" izz="5.79e-5"
+               ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+
+  <!-- ════════════════════════════════════════════════════════════════════════
+       pendulum_joint  — revolute, axis ALONG the arm (arm-frame +X)
+       Origin at far end of arm: x = Lr = 0.085 m from motor_joint.
+       Axis = X in arm frame  (= arm direction in world when arm at theta)
+       The pendulum therefore swings in the arm-YZ plane, i.e. PERPENDICULAR
+       to the arm when viewed from above.
+       Passive: effort = 0  (no actuator on this joint).
+       ════════════════════════════════════════════════════════════════════════════ -->
+  <joint name="pendulum_joint" type="continuous">
+    <parent link="arm_link"/>
+    <child  link="pendulum_link"/>
+    <origin xyz="0.085 0 0" rpy="0 0 0"/>
+    <axis   xyz="1 0 0"/>
+    <dynamics damping="0.0" friction="0.0"/>
+    <limit  effort="0.0" velocity="100.0"/>
+  </joint>
+
+  <!-- ════════════════════════════════════════════════════════════════════════
+       pendulum_link — aluminium rod  (Lp = 0.129 m, r = 0.006 m, Mp = 0.024 kg)
+       At rest (α = 0) hangs straight down →
+         CoM at (0, 0, −Lp/2) = (0, 0, −0.0645) from pendulum_joint origin.
+       Inertia at CoM (thin cylinder along Z):
+         Ixx = Iyy = m/12·(3r²+Lp²) ≈ Mp·Lp²/12 = 3.33e-5  kg·m²
+         Izz = ½·m·r²                              = 4.32e-7  kg·m²
+       ════════════════════════════════════════════════════════════════════════ -->
+  <link name="pendulum_link">
+    <visual>
+      <origin xyz="0 0 -0.0645" rpy="0 0 0"/>
+      <geometry>
+        <!-- STL: <mesh filename="package://Virtual_model/Pendulum.stl" scale="0.001 0.001 0.001"/> -->
+        <cylinder length="0.129" radius="0.006"/>
+      </geometry>
+      <material name="aluminium">
+        <color rgba="0.78 0.78 0.78 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 -0.0645" rpy="0 0 0"/>
+      <geometry>
+        <cylinder length="0.129" radius="0.006"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 -0.0645" rpy="0 0 0"/>
+      <mass value="0.024"/>
+      <inertia ixx="3.33e-5" iyy="3.33e-5" izz="4.32e-7"
+               ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+
+</robot>
