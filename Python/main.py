@@ -1,10 +1,10 @@
 import threading
 import time
 
-from tiva_microcontroller.UART import UART
-from platform import Physical, Virtual
 from Config import config
-from controller.Controller import PendulumController
+from tiva_microcontroller.UART import UART
+from control_platform import Physical, Virtual
+from controller.Controller import run_controller
 
 # UART thread
 def uart_loop(uart, stop_event):
@@ -14,7 +14,7 @@ def uart_loop(uart, stop_event):
         try:
             line = uart.read_line()
             if line:
-                print(f"[UART] {line}")
+                if config.DEBUG: print(f"[UART] {line}")
 
         except KeyboardInterrupt:
             print("\n[Thread] Ctrl+C detected in thread")
@@ -52,28 +52,18 @@ def main():
         )
         thread.start() # Start uart thread
 
-    # Main controller thread
-    print("Starting main loop...")
+    # Main controller
+    print("\nStarting main loop...")
     try:
         if config.QUBE_SIMULATION:
             if config.DEBUG: print("Using Virtual QUBE-Servo 3 (simulation)")
-            qube = Virtual(speed=config.QUBE_SIMULATION_SPEED)
+            qube = Virtual()
         else:
             if config.DEBUG: print("Using Physical QUBE-Servo 3 (hardware)")
             qube = Physical()
 
-        ctrl = PendulumController()
         with qube:
-            input("\nPress ENTER to start control loop...") # Await for enter to start control loop
-            qube.reset()
-            qube.set_led(0, 1, 0)
-            qube.enable(True)
-            try:
-                while True:
-                    voltage = ctrl.step(*qube.read())
-                    qube.write(voltage)
-            except KeyboardInterrupt:
-                print("\nStopped.")
+            run_controller(qube, duration=config.CONTROL_duration)
 
     except KeyboardInterrupt:
         print("\nCtrl+C pressed in main thread")

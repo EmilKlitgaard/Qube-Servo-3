@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mujoco model="qube_servo3">
+  <compiler angle="radian" inertiafromgeom="true"/>
+  <option timestep="0.001" gravity="0 0 -9.82"/>
+
+  <asset>
+    <material name="cube_mat" rgba="0.2 0.2 0.2 1"/>
+    <material name="arm_mat" rgba="0.5 0.5 0.5 1"/>
+    <material name="pendulum_mat" rgba="1.0 0.2 0.2 1"/>
+    <material name="joint_mat" rgba="0.3 0.3 0.3 1"/>
+  </asset>
+
+  <worldbody>
+    <!-- Base (fixed to world) -->
+    <body name="cube" pos="0 0 0">
+      <geom type="box" size="0.05 0.05 0.05" mass="1.0" material="cube_mat"/>
+    </body>
+
+    <!-- Motor axis -->
+    <body name="motor_axis" pos="0 0 0.065">
+      <geom type="cylinder" size="0.01" fromto="0 0 0 0 0 -0.015" mass="0.1" material="joint_mat"/>
+      
+      <!-- Arm -->
+      <body name="arm" pos="0 0 0">
+        <geom type="capsule" size="0.01" fromto="-0.015 0 0 0.015 0 0" mass="0.1" material="arm_mat"/>
+        <geom type="capsule" size="0.005" fromto="0 0 0 0.085 0 0" mass="0.15" material="arm_mat"/>
+        <joint name="theta" type="hinge" pos="0 0 0" axis="0 0 1"
+               limited="true" range="-1.5708 1.5708" damping="0.01"/>
+        
+        <!-- Encoder axis attached to arm (Hidden) -->
+        <body name="encoder_axis" pos="0.085 0 0">
+          <geom type="cylinder" size="0.003 0.001" mass="0.05" material="joint_mat"/>
+          
+          <!-- Pendulum attached to encoder -->
+          <body name="pendulum" pos="0 0 0">
+            <geom type="capsule" size="0.003" fromto="0 0 0.005 0 0 -0.129" mass="0.05" material="pendulum_mat"/>
+            <joint name="alpha" type="hinge" pos="0 0 0" axis="1 0 0" damping="0.0001"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <motor name="arm_motor" joint="theta" gear="1.0" ctrlrange="-1.0 1.0"/>
+  </actuator>
+</mujoco>

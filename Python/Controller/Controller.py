@@ -1,105 +1,132 @@
 """
-Controller.py — Shared control loop for the QUBE-Servo 3 Inverted Pendulum
-===========================================================================
-PendulumController is the single place where sensor data is turned into
-a motor voltage.  It is platform-agnostic: the same instance is used
-whether the qube is a Physical or Virtual device.
+Controller.py – Main control loop for the Qube-Servo 3.
 
-Usage
------
-    from controller.Controller import PendulumController
+This module provides the primary entry point for running the control system.
+It works with both Physical and Virtual backends via the QubeInterface abstraction.
 
-    ctrl = PendulumController()
-    with qube:
-        qube.reset()
-        qube.enable(True)
-        while running:
-            state = qube.read()          # (θ, θ̇, α, α̇)
-            voltage = ctrl.step(*state)
-            qube.write(voltage)
+Example usage:
+    from control_platform import Virtual
+    from controller.Controller import run_controller
+    
+    with Virtual() as qube:
+        run_controller(qube, duration=30.0)
 """
 
+import time
 import math
-import numpy as np
-import controller.Dynamics as dyn
-import controller.Design   as design
+from control_platform import QubeInterface
+from .ControlLaw import ControlLaw
+from Config import config
 
-
-class PendulumController:
+def run_controller(qube: QubeInterface, duration: float = None) -> None:
     """
-    LQR state-feedback controller for the rotary inverted pendulum.
-
-    State error:  e = [θ − θ_ref,  θ̇,  α − π,  α̇]
-    Control law:  V = −K · e          (K is a 1×4 row vector)
-
+    Run the main control loop for the Qube-Servo 3.
+    
+    Stabilizes the pendulum upright (alpha = 0) and centers the arm (theta = 0).
+    Uses a combined swing-up + LQR stabilization controller.
+    
     Parameters
     ----------
-    K : array-like (1×4) or None
-        Gain vector.  If None, LQR gains are computed automatically
-        from Dynamics.linearize() using Design.lqr().
-    theta_ref : float
-        Arm angle setpoint [rad].  Default: π (180°, arm home position).
-        Only meaningful when the arm position is included in the cost (K[0] ≠ 0).
-    voltage_limit : float
-        Symmetric saturation limit [V].  Default: 18 V (amplifier rail).
+    qube : Either a Virtual (MuJoCo) or Physical (real hardware) interface.
+    duration : Maximum runtime [s]. If None, runs until interrupted. Default: None.
     """
+    
+    # Initialize visualizer if requested (only for Virtual simulator)
+    viewer = None
+    if config.QUBE_SIMULATION and config.QUBE_VISUALIZE:
+        try:
+            import mujoco.viewer
+            if config.DEBUG: print("[Control] Launching MuJoCo viewer...")
+            viewer = mujoco.viewer.launch_passive(qube.model, qube.data)
+            if config.DEBUG: print("[Control] Viewer launched.")
+        except Exception as e:
+            print(f"[Control] Warning: Could not launch viewer: {e}")
+            viewer = None
+    
+    # Initialize controller
+    control_law = ControlLaw()
+    
+    # Initialize hardware
+    qube.reset()
+    qube.set_led(1.0, 1.0, 0.0)  # Yellow: initializing
+    qube.enable(True)
+    
+    if config.DEBUG:
+        print("[Control] Starting control loop...")
+        print(f"[Control] Control timestep: {control_law.dt * 1000:.1f} ms")
+        print(f"[Control] Duration: {duration if duration is not None else 'unlimited'} s\n")
+    
+    input("\nPress ENTER to start control loop...") # Await for enter to start control loop
+    
+    # Control loop
+    try:
+        # Initialize timing
+        t = 0.0
+        iteration = 0
+        start_time = time.time()
 
-    def __init__(self,
-                 K:             np.ndarray | None = None,
-                 theta_ref:     float             = dyn.THETA_INIT,
-                 voltage_limit: float             = dyn.VOLTAGE_MAX):
+        while True:
+            # Check exit condition
+            if duration is not None and t > duration:
+                if config.DEBUG: print(f"[Control] Duration of {duration} s reached. Exiting control loop.")
+                break
+            
+            # Check if viewer is still running (passive mode)
+            if viewer is not None and not viewer.is_running():
+                if config.DEBUG: print("[Control] Viewer window closed.")
+                break
+            
+            # Read current state
+            theta, theta_dot, alpha, alpha_dot = qube.read()
 
-        if K is None:
-            self._K = design.lqr()           # shape (1, 4)
-        else:
-            self._K = np.atleast_2d(np.asarray(K, dtype=float))
-
-        self._theta_ref     = theta_ref
-        self._voltage_limit = abs(voltage_limit)
-
-        print(f"[Controller] K = {self._K}")
-        print(f"[Controller] θ_ref = {math.degrees(self._theta_ref):.1f}°, "
-              f"V_limit = ±{self._voltage_limit} V")
-
-    # ── main interface ─────────────────────────────────────────────────────────
-
-    def step(self,
-             theta:     float,
-             theta_dot: float,
-             alpha:     float,
-             alpha_dot: float) -> float:
-        """
-        Compute the motor voltage for the current state.
-
-        Parameters
-        ----------
-        theta     : float   Arm angle [rad]
-        theta_dot : float   Arm angular velocity [rad/s]
-        alpha     : float   Pendulum angle [rad]  (0 = down, π = upright)
-        alpha_dot : float   Pendulum angular velocity [rad/s]
-
-        Returns
-        -------
-        voltage : float   Motor voltage [V], saturated to ±voltage_limit
-        """
-        error = np.array([
-            theta     - self._theta_ref,   # arm deviation from home
-            theta_dot,
-            alpha     - math.pi,           # pendulum deviation from upright
-            alpha_dot,
-        ])
-
-        # V = -K · e   (self._K is (1,4), error is (4,) → result is (1,))
-        voltage = (-(self._K @ error)).item()
-        return max(-self._voltage_limit, min(self._voltage_limit, voltage))
-
-    # ── convenience ───────────────────────────────────────────────────────────
-
-    def set_theta_ref(self, theta_ref: float) -> None:
-        """Change the arm angle setpoint at runtime."""
-        self._theta_ref = theta_ref
-
-    @property
-    def K(self) -> np.ndarray:
-        """The current gain vector (1×4)."""
-        return self._K.copy()
+            # Wrap alpha to [0, 2π) - handles any magnitude of rotation
+            alpha = alpha % (math.radians(360))
+            
+            # Compute control
+            voltage, mode = control_law.compute(theta, theta_dot, alpha, alpha_dot)
+            
+            # Apply control
+            qube.write(voltage)
+            
+            # Sync viewer if active (user responsible for syncing in passive mode)
+            if viewer is not None:
+                viewer.sync()
+            
+            # Update elapsed time
+            t = time.time() - start_time
+            iteration += 1
+            
+            # Periodic status output
+            if config.DEBUG and (iteration % 100) == 0:
+                print(f"[{t:.2f}s] Theta: {math.degrees(theta):+.4f}°, alpha: {math.degrees(alpha):+.4f}°, voltage: {voltage:+.2f}V, mode: {mode}")
+            
+            # LED feedback based on mode
+            if mode == "swingup":
+                qube.set_led(1.0, 0.5, 0.0)  # Orange: swinging up
+            else:
+                # Blink green when stabilized and balanced
+                if (iteration % 20) < 10:
+                    qube.set_led(0.0, 1.0, 0.0)  # Green: stabilized
+                else:
+                    qube.set_led(0.0, 0.5, 0.0)  # Dim green
+        
+        if config.DEBUG: print(f"\n[Control] Control loop completed after {t:.2f} s")
+    
+    except KeyboardInterrupt:
+        if config.DEBUG: print("\n[Control] Interrupted by user (Ctrl+C)")
+    
+    finally:
+        # Close viewer if active
+        if viewer is not None:
+            try:
+                viewer.close()
+            except:
+                pass
+        
+        # Shutdown sequence
+        if config.DEBUG: print("[Control] Shutting down...")
+        qube.write(0.0)
+        qube.set_led(1.0, 0.0, 0.0)  # Red: shutdown
+        qube.enable(False)
+        qube.close()
+        if config.DEBUG: print("[Control] Done.")
