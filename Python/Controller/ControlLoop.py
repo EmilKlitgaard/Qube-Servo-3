@@ -20,7 +20,7 @@ from controller import Controller
 from control_platform import QubeInterface
 
 
-def on_target(theta: float, theta_dot: float, alpha: float, alpha_dot: float) -> bool:
+def on_target(theta: float, theta_dot: float, alpha: float, alpha_dot: float, theta_target: float = 0.0, alpha_target: float = 0.0) -> bool:
     """
     Check if the system is on target (pendulum upright and arm centered) and all joints are stationary.
     
@@ -30,6 +30,8 @@ def on_target(theta: float, theta_dot: float, alpha: float, alpha_dot: float) ->
     theta_dot : Arm angular velocity [rad/s].
     alpha : Pendulum angle [rad].
     alpha_dot : Pendulum angular velocity [rad/s].
+    theta_target : Target arm angle [rad]. Default: 0.0 (center).
+    alpha_target : Target pendulum angle [rad]. Default: 0.0 (upright).
 
     Returns
     -------
@@ -45,9 +47,9 @@ def on_target(theta: float, theta_dot: float, alpha: float, alpha_dot: float) ->
     theta_dot_threshold = math.radians(5)   # 5 degrees/s
     alpha_dot_threshold = math.radians(10)  # 10 degrees/s
     
-    # Check if theta and alpha are within thresholds of target (0 for both)
-    theta_on_target = abs(theta) < theta_threshold
-    alpha_on_target = abs(alpha) < alpha_threshold or abs(alpha - 2 * math.pi) < alpha_threshold
+    # Check if theta and alpha are within thresholds of target
+    theta_on_target = abs(theta - theta_target) < theta_threshold
+    alpha_on_target = abs(alpha - alpha_target) < alpha_threshold or abs(alpha - alpha_target - math.radians(360)) < alpha_threshold
     
     # Check if angular velocities are low (near stationary)
     theta_dot_on_target = abs(theta_dot) < theta_dot_threshold
@@ -119,8 +121,8 @@ def run_controller(qube: QubeInterface, duration: float = None) -> None:
             # Wrap alpha to [0, 2π)
             alpha = alpha % (math.radians(360))
             
-            # Compute control
-            voltage, mode = controller.compute(theta, theta_dot, alpha, alpha_dot)
+            # Compute control (pass targets from qube)
+            voltage, mode = controller.compute(theta, theta_dot, alpha, alpha_dot, qube.target_theta, qube.target_alpha)
             
             # Apply control
             qube.write(voltage)
@@ -141,7 +143,7 @@ def run_controller(qube: QubeInterface, duration: float = None) -> None:
             if mode == "swingup":
                 qube.set_led(1.0, 0.5, 0.0)  # Orange: swinging up
             else:
-                if on_target(theta, theta_dot, alpha, alpha_dot):
+                if on_target(theta, theta_dot, alpha, alpha_dot, qube.target_theta, qube.target_alpha):
                     qube.set_led(0.0, 1.0, 0.0)  # Green: stabilized
                 else:
                     if iteration % 5 == 0:  # Flash Blue: moving to target

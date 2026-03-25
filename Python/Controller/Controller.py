@@ -46,30 +46,37 @@ class Controller:
         self.mode = "swingup"  # "swingup" or "stabilize"
 
 
-    def compute_modern_stabilize(self, theta: float, theta_dot: float, alpha: float, alpha_dot: float) -> float:
+    def compute_modern_stabilize(self, theta: float, theta_dot: float, alpha: float, alpha_dot: float, theta_target: float = 0.0, alpha_target: float = 0.0) -> float:
         """
         Stabilization controller (LQR-like state feedback).
-        Uses linear feedback:  u = -K * [theta, theta_dot, alpha, alpha_dot]^T
+        Uses linear feedback:  u = -K * [error_theta, theta_dot, error_alpha, alpha_dot]^T
         
-        Stabilizes pendulum at alpha=0 (upright) and arm at theta=0 (center).
+        Stabilizes pendulum at alpha_target and arm at theta_target.
         Handles alpha angle wrapping correctly (e.g., 359° ≈ -1° for control purposes).
         
         Parameters
         ----------
         theta, theta_dot, alpha, alpha_dot : Current state.
+        theta_target : Target arm angle [rad]. Default: 0.0 (center).
+        alpha_target : Target pendulum angle [rad]. Default: 0.0 (upright).
         
         Returns
         -------
         voltage : Motor voltage command [V].
         """
 
-        # Wrap alpha to [-π, π] for correct angle error around upright (0)
+        # Wrap alpha to [-π, π] for correct angle error around upright
         alpha_wrapped = math.atan2(math.sin(alpha), math.cos(alpha))
+        alpha_target_wrapped = math.atan2(math.sin(alpha_target), math.cos(alpha_target))
         
-        # State vector: [theta, theta_dot, alpha_wrapped, alpha_dot]
-        state = [theta, theta_dot, alpha_wrapped, alpha_dot]
+        # Compute errors relative to targets
+        theta_error = theta - theta_target
+        alpha_error = alpha_wrapped - alpha_target_wrapped
         
-        # Compute control: Voltage = K * state
+        # State vector: [theta_error, theta_dot, alpha_error, alpha_dot]
+        state = [theta_error, theta_dot, alpha_error, alpha_dot]
+        
+        # Compute control: Voltage = -K * state
         voltage = sum(k_i * state_i for k_i, state_i in zip(self.k, state))
         
         # Saturate to motor limits
@@ -78,7 +85,7 @@ class Controller:
         return voltage
     
 
-    def compute_traditional_stabilize(self, theta: float, theta_dot: float, alpha: float, alpha_dot: float) -> float:
+    def compute_traditional_stabilize(self, theta: float, theta_dot: float, alpha: float, alpha_dot: float, theta_target: float = 0.0, alpha_target: float = 0.0) -> float:
         """
         Traditional PD stabilization controller.
         Similar to compute_modern_stabilize.
@@ -86,7 +93,9 @@ class Controller:
         Parameters
         ----------
         theta, theta_dot, alpha, alpha_dot : Current state.
-        
+        theta_target : Target arm angle [rad]. Default: 0.0 (center).
+        alpha_target : Target pendulum angle [rad]. Default: 0.0 (upright).
+
         Returns
         -------
         voltage : Motor voltage command [V].
@@ -105,7 +114,8 @@ class Controller:
         return voltage
 
 
-    def compute(self, theta: float, theta_dot: float, alpha: float, alpha_dot: float) -> Tuple[float, str]:
+    def compute(self, theta: float, theta_dot: float, alpha: float, alpha_dot: float,
+                theta_target: float = 0.0, alpha_target: float = 0.0) -> Tuple[float, str]:
         """
         Compute motor voltage and return current control mode.
         Switches between swing-up and stabilization modes based on pendulum state.
@@ -113,10 +123,12 @@ class Controller:
         Parameters
         ----------
         theta, theta_dot, alpha, alpha_dot : Current state from qube.read().
+        theta_target : Target arm angle [rad]. Default: 0.0 (center).
+        alpha_target : Target pendulum angle [rad]. Default: 0.0 (upright).
         
         Returns
         -------
-        voltage : Motor voltage command [V], saturated to [-18, +18].
+        voltage : Motor voltage command [V], saturated to [-18, +10].
         mode : Current mode: "swingup" or "stabilize".
         """
         
@@ -126,11 +138,11 @@ class Controller:
         # Determine if we should switch modes
         if self.mode == "swingup":
             if self.swingup.is_upright(alpha):
-                if config.DEBUG: print("[ControlLaw] Switching to stabilization mode.")
+                if config.DEBUG: print("[Controller] Switching to stabilization mode.")
                 self.mode = "stabilize"
         else:
             if not self.swingup.is_upright(alpha):
-                if config.DEBUG: print("[ControlLaw] Pendulum fell down. Switching back to swing-up mode.")
+                if config.DEBUG: print("[Controller] Pendulum fell down. Switching back to swing-up mode.")
                 self.swingup.phase = self.swingup.PHASE_INIT  # Reset swing-up state machine
                 self.mode = "swingup"
         
@@ -139,8 +151,8 @@ class Controller:
             voltage = self.swingup.compute(theta, theta_dot, alpha, alpha_dot)
         else:
             if config.QUBE_MODERN_STABILIZATION:
-                voltage = self.compute_modern_stabilize(theta, theta_dot, alpha, alpha_dot)
+                voltage = self.compute_modern_stabilize(theta, theta_dot, alpha, alpha_dot, theta_target, alpha_target)
             else:
-                voltage = self.compute_traditional_stabilize(theta, theta_dot, alpha, alpha_dot)
+                voltage = self.compute_traditional_stabilize(theta, theta_dot, alpha, alpha_dot, theta_target, alpha_target)
         
         return voltage, self.mode
