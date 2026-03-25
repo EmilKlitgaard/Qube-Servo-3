@@ -25,7 +25,8 @@ import mujoco
 
 from Config import config
 from typing import Tuple, Optional
-from .QubeInterface import QubeInterface
+from control_platform import QubeInterface
+from controller import Controller, SwingUp
 
 
 # ── Model file path ────────────────────────────────────────────────────────────
@@ -168,10 +169,14 @@ class Virtual(QubeInterface):
 
 
     def set_led(self, r: float, g: float, b: float) -> None:
-        """Store LED state (stub implementation; not visualized)."""
+        """Set LED state and update visualization color."""
         self.led_r = max(0.0, min(1.0, r))
         self.led_g = max(0.0, min(1.0, g))
         self.led_b = max(0.0, min(1.0, b))
+
+        if config.QUBE_VISUALIZE and self.model is not None:
+            color_index = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_MATERIAL, "led")
+            self.model.mat_rgba[color_index] = [self.led_r, self.led_g, self.led_b, 0.5]
 
 
     def enable(self, on: bool) -> None:

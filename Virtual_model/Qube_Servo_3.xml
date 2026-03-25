@@ -8,12 +8,14 @@
     <material name="arm_mat" rgba="0.5 0.5 0.5 1"/>
     <material name="pendulum_mat" rgba="1.0 0.2 0.2 1"/>
     <material name="joint_mat" rgba="0.3 0.3 0.3 1"/>
+    <material name="led" rgba="1.0 0.0 0.0 0.5"/>
   </asset>
 
   <worldbody>
     <!-- Base (fixed to world) -->
     <body name="cube" pos="0 0 0">
       <geom type="box" size="0.05 0.05 0.05" mass="1.0" material="cube_mat"/>
+      <geom type="box" size="0.05005" fromto="0 0 0.04 0 0 0.045" material="led"/>
     </body>
 
     <!-- Motor axis -->

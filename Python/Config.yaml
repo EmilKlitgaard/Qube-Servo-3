@@ -7,6 +7,7 @@ UART:
 QUBE:
   SIMULATION: true
   VISUALIZE: true
+  MODERN_STABILIZATION: true
   SIMULATION_SPEED: 1  # 1.0 = real time, 0.5 = half speed
 
 CONTROL:

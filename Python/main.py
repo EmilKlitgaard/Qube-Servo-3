@@ -4,7 +4,7 @@ import time
 from Config import config
 from tiva_microcontroller.UART import UART
 from control_platform import Physical, Virtual
-from controller.Controller import run_controller
+from controller import run_controller
 
 # UART thread
 def uart_loop(uart, stop_event):

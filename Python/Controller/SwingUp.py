@@ -67,9 +67,6 @@ class SwingUp:
         """
         # Check if pendulum is near upright (within 45 degrees)
         is_upright_position = alpha < math.radians(25) or alpha > math.radians(335)
-
-        if is_upright_position:
-            if config.DEBUG: print("[SwingUp] Pendulum in upright region. Ready to transition to stabilization.")
         
         return is_upright_position
     
