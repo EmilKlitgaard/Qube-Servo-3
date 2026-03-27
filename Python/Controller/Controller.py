@@ -38,7 +38,7 @@ class Controller:
         
         # Default LQR gains (tuned empirically for Qube dynamics)
         if lqr_k is None:
-            self.k = [1.0, 1.0, 20.0, 1.5]  # These are reasonable stabilization gains: [k_theta, k_theta_dot, k_alpha, k_alpha_dot]
+            self.k = [3.0, 3.0, 60.0, 5.0]  # These are reasonable stabilization gains: [k_theta, k_theta_dot, k_alpha, k_alpha_dot]
         else:
             self.k = lqr_k
 
@@ -134,6 +134,15 @@ class Controller:
         
         # Add small delay for debugging visualization
         time.sleep(0.001)  
+
+        """
+        # Pause if space is pressed, and wait until it is pressed again (for debugging)
+        try:
+            time.sleep(0.001)
+        except KeyboardInterrupt:
+            print("\n[Controller] Spacebar pressed. Pausing control loop. Press spacebar again to resume.")
+            input("[Controller] Press Enter to resume...")
+        """
 
         # Determine if we should switch modes
         if self.mode == "swingup":

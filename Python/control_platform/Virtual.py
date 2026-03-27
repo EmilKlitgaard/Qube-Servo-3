@@ -223,7 +223,6 @@ class Virtual(QubeInterface):
         alpha_old = self.data.qpos[self.alpha_joint_id]
 
         # Apply control: convert voltage to torque
-        # Per docs: actuators have gear ratios and force transmission in mjModel
         if self.enabled:
             torque = self.voltage_demand * self.motor_constant
         else:
@@ -233,7 +232,6 @@ class Virtual(QubeInterface):
         self.data.ctrl[self.motor_actuator_id] = torque
 
         # Step the simulation (per docs: top-level function advancing all computations)
-        # This updates: qpos, qvel, intermediate results
         mujoco.mj_step(self.model, self.data)
 
         # Get new state from mjData
@@ -246,14 +244,11 @@ class Virtual(QubeInterface):
         alpha_dot_raw = self.data.qvel[self.alpha_joint_id]
 
         # Angle convention transformation:
-        # - MuJoCo alpha = π at down, 0 at up (standard hinge convention)
-        # - Control logic expects: alpha = 0 at upright, π at down
-        # So: alpha_returned = π - alpha_mujoco
         alpha_returned = math.pi - alpha_new
         # Velocity sign reversal due to the inversion
         alpha_dot = -alpha_dot_raw
 
-        # Clamp theta to [-π/2, π/2] (joint limited in MJCF, but be safe)
+        # Clamp theta to [-π/2, π/2] (joint also limited in MJCF)
         theta = max(-math.pi / 2, min(math.pi / 2, theta_new))
 
         return theta, theta_dot, alpha_returned, alpha_dot
