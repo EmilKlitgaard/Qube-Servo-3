@@ -7,6 +7,7 @@ UART:
 QUBE:
   SIMULATION: true
   VISUALIZE: true
+  MODERN_STABILIZATION: true
   SIMULATION_SPEED: 1  # 1.0 = real time, 0.5 = half speed
 
 CONTROL:
@@ -17,14 +18,7 @@ CONTROL:
   # Swing-up thresholds
   swingup_alpha_threshold: 0.3         # Pendulum angle threshold for mode switch [rad]
   swingup_alpha_dot_threshold: 2.0     # Pendulum velocity threshold for mode switch [rad/s]
-  
-  # LQR stabilization gains [theta, theta_dot, alpha, alpha_dot]
-  # These are tuned to balance the pendulum at upright and center the arm
-  lqr_gains:
-    - 1.5      # k_theta: penalize arm displacement from center
-    - 0.5      # k_theta_dot: penalize arm velocity
-    - 15.0     # k_alpha: penalize pendulum displacement from upright
-    - 3.0      # k_alpha_dot: penalize pendulum velocity
+
 
 PLANT:
   # Physical/simulation parameters

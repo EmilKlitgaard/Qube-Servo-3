@@ -46,7 +46,6 @@ _COUNTS_TO_RAD = 2.0 * math.pi / 512.0 / 4.0
 
 
 # ── Physical implementation ───────────────────────────────────────────────────
-
 class Physical(QubeInterface):
     """
     QUBE-Servo 3 interface backed by the real HIL hardware via the
@@ -75,8 +74,8 @@ class Physical(QubeInterface):
         # Derivative filter state  [u_prev, y_prev]
         self._ddt_state = np.zeros(2, dtype=np.float64)
 
-    # ── lifecycle ─────────────────────────────────────────────────────────────
 
+    # ── lifecycle ─────────────────────────────────────────────────────────────
     def open(self) -> None:
         if not _QUANSER_AVAILABLE:
             raise RuntimeError(
@@ -88,6 +87,7 @@ class Physical(QubeInterface):
             )
         self._card = HIL("qube_servo3_usb", "0")
         print("[Physical] HIL card opened.")
+
 
     def close(self) -> None:
         if self._card is None:
@@ -106,18 +106,26 @@ class Physical(QubeInterface):
         self._card = None
         print("[Physical] HIL card closed.")
 
-    # ── initialisation helpers ─────────────────────────────────────────────────
 
+    # ── initialisation helpers ─────────────────────────────────────────────────
     def reset(self) -> None:
         self._card.set_encoder_counts(
             _ENC_R, len(_ENC_R), np.zeros(len(_ENC_R), dtype=np.int32)
         )
         self._ddt_state[:] = 0.0
 
+
+    def set_target(self, theta: float, alpha: float) -> None:        
+        """Set the target state for the controller (not used in this implementation)."""
+        # This method is not used in this implementation, but we could write
+        # target angles to the OTH_W channels if needed for advanced control strategies.
+    
+
     def set_led(self, r: float, g: float, b: float) -> None:
         self._card.write_other(
             _OTH_W, len(_OTH_W), np.array([r, g, b], dtype=np.float64)
         )
+
 
     def enable(self, on: bool) -> None:
         # Always zero the voltage before toggling the amplifier
@@ -128,8 +136,8 @@ class Physical(QubeInterface):
             _DIG_W, len(_DIG_W), np.array([1 if on else 0], dtype=np.int8)
         )
 
-    # ── timed task (lazy-start) ────────────────────────────────────────────────
 
+    # ── timed task (lazy-start) ────────────────────────────────────────────────
     def _start_task(self, samples: int = 2**32 - 1) -> None:
         self._task = self._card.task_create_reader(
             1000,
@@ -140,8 +148,8 @@ class Physical(QubeInterface):
         )
         self._card.task_start(self._task, 0, self._freq, samples)
 
-    # ── control loop ──────────────────────────────────────────────────────────
 
+    # ── control loop ──────────────────────────────────────────────────────────
     def read(self) -> tuple[float, float]:
         if self._task is None:
             self._start_task()
@@ -154,6 +162,7 @@ class Physical(QubeInterface):
             theta, self._ddt_state, self._filt_bw, self._Ts
         )
         return theta, theta_dot
+
 
     def write(self, voltage: float) -> None:
         v = max(min(voltage, 18.0), -18.0)

@@ -41,6 +41,10 @@ class QubeInterface(ABC):
         """Zero encoder counts (Physical) or simulation state (Virtual)."""
 
     @abstractmethod
+    def set_target(self, theta: float, alpha: float) -> None:
+        """Set the target state for the controller (not used in this implementation)."""
+
+    @abstractmethod
     def set_led(self, r: float, g: float, b: float) -> None:
         """
         Set the RGB LED.

@@ -4,7 +4,7 @@ import time
 from Config import config
 from tiva_microcontroller.UART import UART
 from control_platform import Physical, Virtual
-from controller.Controller import run_controller
+from controller import run_controller
 
 # UART thread
 def uart_loop(uart, stop_event):
@@ -35,6 +35,14 @@ def main():
     # Event to signal thread to stop
     stop_event = threading.Event()
 
+    # Initialize control platform
+    if config.QUBE_SIMULATION:
+        if config.DEBUG: print("Using Virtual QUBE-Servo 3 (simulation)")
+        qube = Virtual()
+    else:
+        if config.DEBUG: print("Using Physical QUBE-Servo 3 (hardware)")
+        qube = Physical()
+
     # Initialize UART thread
     print("Initializing UART thread...")
     try:
@@ -51,17 +59,30 @@ def main():
             daemon=True
         )
         thread.start() # Start uart thread
+    else:
+        print("[UART] Testing mode: Will set random theta targets every 10 seconds")
+        import math
+        import random
+        
+        def test_thread_func():
+            """Set random theta targets every 10 seconds until controller finishes."""
+            time.sleep(10)  
+            while True:
+                input("\nPress ENTER to set a new random theta target...") # Await for enter to set new target
+                theta_target = math.radians(random.uniform(-45, 45))  # Random target between -45 and +45 degrees
+                if config.DEBUG: print(f"[Test] Setting theta target to {math.degrees(theta_target):.1f}°")
+                qube.set_target(theta_target, 0.0)
+        
+        thread = threading.Thread(
+            target=test_thread_func,
+            name="TestThread",
+            daemon=True
+        )
+        thread.start()
 
     # Main controller
     print("\nStarting main loop...")
     try:
-        if config.QUBE_SIMULATION:
-            if config.DEBUG: print("Using Virtual QUBE-Servo 3 (simulation)")
-            qube = Virtual()
-        else:
-            if config.DEBUG: print("Using Physical QUBE-Servo 3 (hardware)")
-            qube = Physical()
-
         with qube:
             run_controller(qube, duration=config.CONTROL_duration)
 

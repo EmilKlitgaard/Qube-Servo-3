@@ -1,132 +1,167 @@
 """
-Controller.py – Main control loop for the Qube-Servo 3.
+ControlLaw.py – Control laws for the Qube-Servo 3.
 
-This module provides the primary entry point for running the control system.
-It works with both Physical and Virtual backends via the QubeInterface abstraction.
+Implements mode-switching between:
+  1. Swing-up (energy-based) controller: brings pendulum from down to near upright
+  2. Stabilization (LQR-like) controller: balances pendulum at upright and centers arm
 
-Example usage:
-    from control_platform import Virtual
-    from controller.Controller import run_controller
-    
-    with Virtual() as qube:
-        run_controller(qube, duration=30.0)
+The controller automatically switches between modes based on pendulum position/velocity.
+For swing-up implementation details, see SwingUp.py
 """
 
-import time
 import math
-from control_platform import QubeInterface
-from .ControlLaw import ControlLaw
+import time
+from typing import Tuple
+from .SwingUp import SwingUp
 from Config import config
 
-def run_controller(qube: QubeInterface, duration: float = None) -> None:
+class Controller:
     """
-    Run the main control loop for the Qube-Servo 3.
+    Combined swing-up and stabilization controller for the Qube-Servo 3.
     
-    Stabilizes the pendulum upright (alpha = 0) and centers the arm (theta = 0).
-    Uses a combined swing-up + LQR stabilization controller.
+    This class manages mode-switching between swing-up and stabilization phases.
+    The actual swing-up mathematics are delegated to SwingUp class.
     
     Parameters
     ----------
-    qube : Either a Virtual (MuJoCo) or Physical (real hardware) interface.
-    duration : Maximum runtime [s]. If None, runs until interrupted. Default: None.
+    dt : Control timestep [s].
+    lqr_k : list of 4 floats
+        LQR feedback gains [k_theta, k_theta_dot, k_alpha, k_alpha_dot].
+        Default corresponds to reasonable values for the Qube.
     """
+
+    def __init__(self, dt: float = 0.001, lqr_k: list = None):
+        self.dt = dt
+        
+        # Initialize swing-up controller
+        self.swingup = SwingUp(dt)
+        
+        # Default LQR gains (tuned empirically for Qube dynamics)
+        if lqr_k is None:
+            self.k = [3.0, 3.0, 60.0, 5.0]  # These are reasonable stabilization gains: [k_theta, k_theta_dot, k_alpha, k_alpha_dot]
+        else:
+            self.k = lqr_k
+
+        # Internal state
+        self.mode = "swingup"  # "swingup" or "stabilize"
+
+
+    def compute_modern_stabilize(self, theta: float, theta_dot: float, alpha: float, alpha_dot: float, theta_target: float = 0.0, alpha_target: float = 0.0) -> float:
+        """
+        Stabilization controller (LQR-like state feedback).
+        Uses linear feedback:  u = -K * [error_theta, theta_dot, error_alpha, alpha_dot]^T
+        
+        Stabilizes pendulum at alpha_target and arm at theta_target.
+        Handles alpha angle wrapping correctly (e.g., 359° ≈ -1° for control purposes).
+        
+        Parameters
+        ----------
+        theta, theta_dot, alpha, alpha_dot : Current state.
+        theta_target : Target arm angle [rad]. Default: 0.0 (center).
+        alpha_target : Target pendulum angle [rad]. Default: 0.0 (upright).
+        
+        Returns
+        -------
+        voltage : Motor voltage command [V].
+        """
+
+        # Wrap alpha to [-π, π] for correct angle error around upright
+        alpha_wrapped = math.atan2(math.sin(alpha), math.cos(alpha))
+        alpha_target_wrapped = math.atan2(math.sin(alpha_target), math.cos(alpha_target))
+        
+        # Compute errors relative to targets
+        theta_error = theta - theta_target
+        alpha_error = alpha_wrapped - alpha_target_wrapped
+        
+        # State vector: [theta_error, theta_dot, alpha_error, alpha_dot]
+        state = [theta_error, theta_dot, alpha_error, alpha_dot]
+        
+        # Compute control: Voltage = -K * state
+        voltage = sum(k_i * state_i for k_i, state_i in zip(self.k, state))
+        
+        # Saturate to motor limits
+        voltage = max(-10.0, min(10.0, voltage))
+
+        return voltage
     
-    # Initialize visualizer if requested (only for Virtual simulator)
-    viewer = None
-    if config.QUBE_SIMULATION and config.QUBE_VISUALIZE:
+
+    def compute_traditional_stabilize(self, theta: float, theta_dot: float, alpha: float, alpha_dot: float, theta_target: float = 0.0, alpha_target: float = 0.0) -> float:
+        """
+        Traditional PD stabilization controller.
+        Similar to compute_modern_stabilize.
+        
+        Parameters
+        ----------
+        theta, theta_dot, alpha, alpha_dot : Current state.
+        theta_target : Target arm angle [rad]. Default: 0.0 (center).
+        alpha_target : Target pendulum angle [rad]. Default: 0.0 (upright).
+
+        Returns
+        -------
+        voltage : Motor voltage command [V].
+        """
+
+        # Wrap alpha to [-π, π] for correct angle error around upright (0)
+        alpha_wrapped = math.atan2(math.sin(alpha), math.cos(alpha))
+    
+        # PD control: u = -Kp * alpha_error - Kd * alpha_dot
+        Kp = 20.0  # Proportional gain for angle error
+        Kd = 1.5   # Derivative gain for angular velocity
+        error = (-Kp * alpha_wrapped) - (Kd * alpha_dot)
+        
+        voltage = error
+
+        return voltage
+
+
+    def compute(self, theta: float, theta_dot: float, alpha: float, alpha_dot: float,
+                theta_target: float = 0.0, alpha_target: float = 0.0) -> Tuple[float, str]:
+        """
+        Compute motor voltage and return current control mode.
+        Switches between swing-up and stabilization modes based on pendulum state.
+        
+        Parameters
+        ----------
+        theta, theta_dot, alpha, alpha_dot : Current state from qube.read().
+        theta_target : Target arm angle [rad]. Default: 0.0 (center).
+        alpha_target : Target pendulum angle [rad]. Default: 0.0 (upright).
+        
+        Returns
+        -------
+        voltage : Motor voltage command [V], saturated to [-18, +10].
+        mode : Current mode: "swingup" or "stabilize".
+        """
+        
+        # Add small delay for debugging visualization
+        time.sleep(0.001)  
+
+        """
+        # Pause if space is pressed, and wait until it is pressed again (for debugging)
         try:
-            import mujoco.viewer
-            if config.DEBUG: print("[Control] Launching MuJoCo viewer...")
-            viewer = mujoco.viewer.launch_passive(qube.model, qube.data)
-            if config.DEBUG: print("[Control] Viewer launched.")
-        except Exception as e:
-            print(f"[Control] Warning: Could not launch viewer: {e}")
-            viewer = None
-    
-    # Initialize controller
-    control_law = ControlLaw()
-    
-    # Initialize hardware
-    qube.reset()
-    qube.set_led(1.0, 1.0, 0.0)  # Yellow: initializing
-    qube.enable(True)
-    
-    if config.DEBUG:
-        print("[Control] Starting control loop...")
-        print(f"[Control] Control timestep: {control_law.dt * 1000:.1f} ms")
-        print(f"[Control] Duration: {duration if duration is not None else 'unlimited'} s\n")
-    
-    input("\nPress ENTER to start control loop...") # Await for enter to start control loop
-    
-    # Control loop
-    try:
-        # Initialize timing
-        t = 0.0
-        iteration = 0
-        start_time = time.time()
+            time.sleep(0.001)
+        except KeyboardInterrupt:
+            print("\n[Controller] Spacebar pressed. Pausing control loop. Press spacebar again to resume.")
+            input("[Controller] Press Enter to resume...")
+        """
 
-        while True:
-            # Check exit condition
-            if duration is not None and t > duration:
-                if config.DEBUG: print(f"[Control] Duration of {duration} s reached. Exiting control loop.")
-                break
-            
-            # Check if viewer is still running (passive mode)
-            if viewer is not None and not viewer.is_running():
-                if config.DEBUG: print("[Control] Viewer window closed.")
-                break
-            
-            # Read current state
-            theta, theta_dot, alpha, alpha_dot = qube.read()
-
-            # Wrap alpha to [0, 2π) - handles any magnitude of rotation
-            alpha = alpha % (math.radians(360))
-            
-            # Compute control
-            voltage, mode = control_law.compute(theta, theta_dot, alpha, alpha_dot)
-            
-            # Apply control
-            qube.write(voltage)
-            
-            # Sync viewer if active (user responsible for syncing in passive mode)
-            if viewer is not None:
-                viewer.sync()
-            
-            # Update elapsed time
-            t = time.time() - start_time
-            iteration += 1
-            
-            # Periodic status output
-            if config.DEBUG and (iteration % 100) == 0:
-                print(f"[{t:.2f}s] Theta: {math.degrees(theta):+.4f}°, alpha: {math.degrees(alpha):+.4f}°, voltage: {voltage:+.2f}V, mode: {mode}")
-            
-            # LED feedback based on mode
-            if mode == "swingup":
-                qube.set_led(1.0, 0.5, 0.0)  # Orange: swinging up
+        # Determine if we should switch modes
+        if self.mode == "swingup":
+            if self.swingup.is_upright(alpha):
+                if config.DEBUG: print("[Controller] Switching to stabilization mode.")
+                self.mode = "stabilize"
+        else:
+            if not self.swingup.is_upright(alpha):
+                if config.DEBUG: print("[Controller] Pendulum fell down. Switching back to swing-up mode.")
+                self.swingup.phase = self.swingup.PHASE_INIT  # Reset swing-up state machine
+                self.mode = "swingup"
+        
+        # Compute control based on mode
+        if self.mode == "swingup":
+            voltage = self.swingup.compute(theta, theta_dot, alpha, alpha_dot)
+        else:
+            if config.QUBE_MODERN_STABILIZATION:
+                voltage = self.compute_modern_stabilize(theta, theta_dot, alpha, alpha_dot, theta_target, alpha_target)
             else:
-                # Blink green when stabilized and balanced
-                if (iteration % 20) < 10:
-                    qube.set_led(0.0, 1.0, 0.0)  # Green: stabilized
-                else:
-                    qube.set_led(0.0, 0.5, 0.0)  # Dim green
+                voltage = self.compute_traditional_stabilize(theta, theta_dot, alpha, alpha_dot, theta_target, alpha_target)
         
-        if config.DEBUG: print(f"\n[Control] Control loop completed after {t:.2f} s")
-    
-    except KeyboardInterrupt:
-        if config.DEBUG: print("\n[Control] Interrupted by user (Ctrl+C)")
-    
-    finally:
-        # Close viewer if active
-        if viewer is not None:
-            try:
-                viewer.close()
-            except:
-                pass
-        
-        # Shutdown sequence
-        if config.DEBUG: print("[Control] Shutting down...")
-        qube.write(0.0)
-        qube.set_led(1.0, 0.0, 0.0)  # Red: shutdown
-        qube.enable(False)
-        qube.close()
-        if config.DEBUG: print("[Control] Done.")
+        return voltage, self.mode

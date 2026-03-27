@@ -25,7 +25,8 @@ import mujoco
 
 from Config import config
 from typing import Tuple, Optional
-from .QubeInterface import QubeInterface
+from control_platform import QubeInterface
+from controller import Controller, SwingUp
 
 
 # ── Model file path ────────────────────────────────────────────────────────────
@@ -79,6 +80,10 @@ class Virtual(QubeInterface):
         # Set startup states for beta and alpha (arm at center, pendulum down)
         self.startup_theta = 0.0
         self.startup_alpha = 0.0
+
+        # Target state (used for tracking control)
+        self.target_theta = 0.0
+        self.target_alpha = 0.0
 
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -136,23 +141,17 @@ class Virtual(QubeInterface):
         """
         Reset the simulation to the initial state.
         
-        Per MuJoCo docs:
-        - qpos: generalized coordinates (joint positions)
-        - qvel: generalized velocities
-        - mjData is the "scratch pad" for all state and intermediate results
-        
         Initial configuration:
         - Arm at center (theta = 0)
-        - Pendulum at down position (alpha = π in MuJoCo; 
-          read() converts to 0 for control logic)
+        - Pendulum at upright position (alpha = 0)
         - All velocities zeroed
         """
         if self.model is None or self.data is None:
             raise RuntimeError("Simulator not open. Call open() first.")
 
         # Set initial generalized coordinates (qpos)
-        self.data.qpos[self.theta_joint_id] = 0.0       # theta = 0 (center)
-        self.data.qpos[self.alpha_joint_id] = 0.0       # alpha = 0 (down)
+        self.data.qpos[self.theta_joint_id] = self.startup_theta       # theta = 0 (center)
+        self.data.qpos[self.alpha_joint_id] = self.startup_alpha       # alpha = 0 (upright)
 
         # Zero all generalized velocities (qvel)
         self.data.qvel[:] = 0.0
@@ -167,11 +166,23 @@ class Virtual(QubeInterface):
         print("[Virtual] Simulation reset.")
 
 
+    def set_target(self, theta: float, alpha: float) -> None:
+        """Set the target state for the controller to track."""
+        self.target_theta = theta
+        self.target_alpha = alpha
+        if config.DEBUG:
+            print(f"[Virtual] New target: theta={math.degrees(theta):.1f}°, alpha={math.degrees(alpha):.1f}°")
+
+
     def set_led(self, r: float, g: float, b: float) -> None:
-        """Store LED state (stub implementation; not visualized)."""
+        """Set LED state and update visualization color."""
         self.led_r = max(0.0, min(1.0, r))
         self.led_g = max(0.0, min(1.0, g))
         self.led_b = max(0.0, min(1.0, b))
+
+        if config.QUBE_VISUALIZE and self.model is not None:
+            color_index = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_MATERIAL, "led")
+            self.model.mat_rgba[color_index] = [self.led_r, self.led_g, self.led_b, 0.5]
 
 
     def enable(self, on: bool) -> None:
@@ -212,7 +223,6 @@ class Virtual(QubeInterface):
         alpha_old = self.data.qpos[self.alpha_joint_id]
 
         # Apply control: convert voltage to torque
-        # Per docs: actuators have gear ratios and force transmission in mjModel
         if self.enabled:
             torque = self.voltage_demand * self.motor_constant
         else:
@@ -222,7 +232,6 @@ class Virtual(QubeInterface):
         self.data.ctrl[self.motor_actuator_id] = torque
 
         # Step the simulation (per docs: top-level function advancing all computations)
-        # This updates: qpos, qvel, intermediate results
         mujoco.mj_step(self.model, self.data)
 
         # Get new state from mjData
@@ -235,14 +244,11 @@ class Virtual(QubeInterface):
         alpha_dot_raw = self.data.qvel[self.alpha_joint_id]
 
         # Angle convention transformation:
-        # - MuJoCo alpha = π at down, 0 at up (standard hinge convention)
-        # - Control logic expects: alpha = 0 at upright, π at down
-        # So: alpha_returned = π - alpha_mujoco
         alpha_returned = math.pi - alpha_new
         # Velocity sign reversal due to the inversion
         alpha_dot = -alpha_dot_raw
 
-        # Clamp theta to [-π/2, π/2] (joint limited in MJCF, but be safe)
+        # Clamp theta to [-π/2, π/2] (joint also limited in MJCF)
         theta = max(-math.pi / 2, min(math.pi / 2, theta_new))
 
         return theta, theta_dot, alpha_returned, alpha_dot
@@ -262,4 +268,4 @@ class Virtual(QubeInterface):
             raise RuntimeError("Simulator not open. Call open() first.")
 
         # Saturate voltage to amplifier limit
-        self.voltage_demand = max(-10.0, min(10.0, voltage))
+        self.voltage_demand = max(config.PLANT_voltage_min, min(config.PLANT_voltage_max, voltage))
