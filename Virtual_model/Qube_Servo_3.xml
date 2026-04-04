@@ -14,7 +14,7 @@
 
   <worldbody>
     <!-- Floor -->
-    <geom type="plane" size="10 10 0.05" material="floor" pos="0 0 -0.0001"/>
+    <geom type="plane" size="1 1 0.05" material="floor" pos="0 0 -0.0001"/>
 
     <!-- Base (fixed to world) -->
     <body name="cube" pos="0 0 0.0501">

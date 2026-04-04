@@ -65,10 +65,9 @@ def main():
         import random
         
         def test_thread_func():
-            """Set random theta targets every 10 seconds until controller finishes."""
             time.sleep(10)  
             while True:
-                input("\nPress ENTER to set a new random theta target...") # Await for enter to set new target
+                input("\nPress ENTER to set a new random theta target...\n") # Await for enter to set new target
                 theta_target = math.radians(random.uniform(-45, 45))  # Random target between -45 and +45 degrees
                 if config.DEBUG: print(f"[Test] Setting theta target to {math.degrees(theta_target):.1f}°")
                 qube.set_target(theta_target, 0.0)
@@ -84,7 +83,7 @@ def main():
     print("\nStarting main loop...")
     try:
         with qube:
-            run_controller(qube, duration=config.CONTROL_duration)
+            run_controller(qube, duration=config.CONTROL_DURATION)
 
     except KeyboardInterrupt:
         print("\nCtrl+C pressed in main thread")

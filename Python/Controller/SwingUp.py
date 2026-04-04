@@ -13,7 +13,6 @@ multi-step state machine that follows these steps:
 """
 
 import math
-
 from Config import config
 
 class SwingUp:
@@ -41,13 +40,14 @@ class SwingUp:
 
     SWINGUP_SEQUENCE = 1
     
-    def __init__(self, dt: float = 0.001):
+    def __init__(self, dt: float = config.CONTROL_DT):
         self.dt = dt
         self.phase = self.PHASE_INIT
-        self.phase_time = 0.0
         
         # Phase parameters
         self.alpha_dot_threshold = math.radians(10)         # 10 degrees/s in radians/s
+        self.top_threshold = 25
+        self.down_threshold = 5
     
 
     def is_upright(self, alpha: float) -> bool:
@@ -67,10 +67,17 @@ class SwingUp:
         -------
         bool : True if ready to exit swing-up and go to stabilization
         """
-        # Check if pendulum is near upright (within 45 degrees)
-        is_upright_position = alpha < math.radians(25) or alpha > math.radians(335)
+        # Check if pendulum is near upright (within 50 degrees)
+        is_upright_position = alpha < math.radians(self.top_threshold) or alpha > math.radians(360-self.top_threshold)
         
         return is_upright_position
+    
+
+    def is_down(self, alpha: float) -> bool:
+        # Check if pendulum is near down (within 10 degrees)
+        is_down_position = alpha < math.radians(180+self.down_threshold) and alpha > math.radians(180-self.down_threshold)
+        
+        return is_down_position
     
 
     def compute(self, theta: float, theta_dot: float, alpha: float, alpha_dot: float) -> float:
@@ -97,7 +104,6 @@ class SwingUp:
         voltage : Motor voltage command [V], saturated to [-18, +18]
         """
         
-        self.phase_time += self.dt
         voltage = 0.0
         
         if self.SWINGUP_SEQUENCE == 0:
@@ -109,7 +115,6 @@ class SwingUp:
                     
                     if abs(error) < 0.05:  # Within 0.05 rad of target
                         self.phase = self.PHASE_WAIT_SWING
-                        self.phase_time = 0.0
                         voltage = 0.0
                     else:
                         # Proportional feedback to reach target
@@ -121,9 +126,8 @@ class SwingUp:
                     error = target_theta - theta
                     
                     # Check if pendulum swing has settled
-                    if alpha < math.radians(185) and alpha > math.radians(175) and abs(alpha_dot) < self.alpha_dot_threshold:
+                    if self.is_down(alpha) and abs(alpha_dot) < self.alpha_dot_threshold:
                         self.phase = self.PHASE_RAPID_MOVE
-                        self.phase_time = 0.0
                         voltage = 0.0
                     else:
                         # Hold position
@@ -136,7 +140,6 @@ class SwingUp:
                     
                     if abs(error) < 0.05:  # Within 0.05 rad of target
                         self.phase = self.PHASE_WAIT_BOTTOM
-                        self.phase_time = 0.0
                         voltage = 0.0
                     else:
                         voltage = 10.0
@@ -147,9 +150,8 @@ class SwingUp:
                     error = target_theta - theta
                     
                     # Wait for pendulum to reach bottom region (alpha close to π)            
-                    if alpha < math.radians(185) and alpha > math.radians(175):
+                    if self.is_down(alpha):
                         self.phase = self.PHASE_RETURN_CENTER
-                        self.phase_time = 0.0
                         voltage = 0.0
                     else:
                         # Gently move toward center
@@ -162,7 +164,6 @@ class SwingUp:
                     
                     if abs(error) < 0.05:
                         self.phase = self.PHASE_EXIT
-                        self.phase_time = 0.0
                         voltage = 0.0
                     else:
                         # Return to center
@@ -177,8 +178,9 @@ class SwingUp:
                         # Successfully exited swing-up
                         voltage = 0.0
                     else:
+                        # If not upright, await pendulum to reach bottom position.
                         voltage = 10.0 * error
-                        if alpha < math.radians(185) and alpha > math.radians(175) and abs(alpha_dot) < self.alpha_dot_threshold:
+                        if self.is_down(alpha) and abs(alpha_dot) < self.alpha_dot_threshold:
                             self.phase = self.PHASE_INIT  # If not upright, go back to waiting for bottom
         
         elif self.SWINGUP_SEQUENCE == 1:
@@ -190,7 +192,6 @@ class SwingUp:
                     
                     if abs(error) < 0.05:  # Within 0.05 rad of target
                         self.phase = self.PHASE_WAIT_SWING
-                        self.phase_time = 0.0
                         voltage = 0.0
                     else:
                         # Proportional feedback: use error sign to determine direction
@@ -202,9 +203,8 @@ class SwingUp:
                     error = target_theta - theta
                     
                     # Wait for pendulum to reach bottom region (alpha close to π)            
-                    if alpha < math.radians(185) and alpha > math.radians(175):
+                    if self.is_down(alpha):
                         self.phase = self.PHASE_RAPID_MOVE
-                        self.phase_time = 0.0
                         voltage = 0.0
                     else:
                         # Gently move toward target
@@ -217,7 +217,6 @@ class SwingUp:
                     
                     if abs(error) < 0.05:  # Within 0.05 rad of target
                         self.phase = self.PHASE_WAIT_BOTTOM
-                        self.phase_time = 0.0
                         voltage = 0.0
                     else:
                         # Proportional feedback: use error sign to determine direction
@@ -229,9 +228,8 @@ class SwingUp:
                     error = target_theta - theta
                     
                     # Wait for pendulum to reach bottom region (alpha close to π)            
-                    if alpha < math.radians(185) and alpha > math.radians(175):
+                    if self.is_down(alpha):
                         self.phase = self.PHASE_INIT
-                        self.phase_time = 0.0
                         voltage = 0.0
                     else:
                         # Gently move toward target
@@ -242,9 +240,9 @@ class SwingUp:
                 voltage = 0.0
 
         # Saturate voltage to amplifier limits
-        voltage = max(-10.0, min(10.0, voltage))
+        voltage = max(config.PLANT_VOLTAGE_MIN, min(config.PLANT_VOLTAGE_MAX, voltage))
 
-        # print info for debugging in degrees
+        # Print info for debugging in degrees
         print(f"[SwingUp] Phase: {self.phase}, theta: {math.degrees(theta):.1f}°, alpha: {math.degrees(alpha):.1f}°, alpha_dot: {math.degrees(alpha_dot):.1f}°/s")
         
         return voltage

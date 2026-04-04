@@ -30,17 +30,12 @@ class Controller:
         Default corresponds to reasonable values for the Qube.
     """
 
-    def __init__(self, dt: float = 0.001, lqr_k: list = None):
+    def __init__(self, dt: float = 0.001, lqr_k: list = [3.0, 3.0, 60.0, 5.0]):
         self.dt = dt
+        self.k = lqr_k
         
         # Initialize swing-up controller
-        self.swingup = SwingUp(dt)
-        
-        # Default LQR gains (tuned empirically for Qube dynamics)
-        if lqr_k is None:
-            self.k = [3.0, 3.0, 60.0, 5.0]  # These are reasonable stabilization gains: [k_theta, k_theta_dot, k_alpha, k_alpha_dot]
-        else:
-            self.k = lqr_k
+        self.swingup = SwingUp(dt)        
 
         # Internal state
         self.mode = "swingup"  # "swingup" or "stabilize"
@@ -114,8 +109,7 @@ class Controller:
         return voltage
 
 
-    def compute(self, theta: float, theta_dot: float, alpha: float, alpha_dot: float,
-                theta_target: float = 0.0, alpha_target: float = 0.0) -> Tuple[float, str]:
+    def compute(self, theta: float, theta_dot: float, alpha: float, alpha_dot: float, theta_target: float = 0.0, alpha_target: float = 0.0) -> Tuple[float, str]:
         """
         Compute motor voltage and return current control mode.
         Switches between swing-up and stabilization modes based on pendulum state.
@@ -131,37 +125,26 @@ class Controller:
         voltage : Motor voltage command [V], saturated to [-18, +10].
         mode : Current mode: "swingup" or "stabilize".
         """
-        
-        # Add small delay for debugging visualization
-        time.sleep(0.001)  
 
-        """
-        # Pause if space is pressed, and wait until it is pressed again (for debugging)
-        try:
-            time.sleep(0.001)
-        except KeyboardInterrupt:
-            print("\n[Controller] Spacebar pressed. Pausing control loop. Press spacebar again to resume.")
-            input("[Controller] Press Enter to resume...")
-        """
-
-        # Determine if we should switch modes
         if self.mode == "swingup":
+            # Compute swing-up voltage
+            voltage = self.swingup.compute(theta, theta_dot, alpha, alpha_dot)
+
+            # Check if we are close enough to upright to switch to stabilization
             if self.swingup.is_upright(alpha):
                 if config.DEBUG: print("[Controller] Switching to stabilization mode.")
                 self.mode = "stabilize"
         else:
-            if not self.swingup.is_upright(alpha):
-                if config.DEBUG: print("[Controller] Pendulum fell down. Switching back to swing-up mode.")
-                self.swingup.phase = self.swingup.PHASE_INIT  # Reset swing-up state machine
-                self.mode = "swingup"
-        
-        # Compute control based on mode
-        if self.mode == "swingup":
-            voltage = self.swingup.compute(theta, theta_dot, alpha, alpha_dot)
-        else:
-            if config.QUBE_MODERN_STABILIZATION:
+            # Compute stabilization voltage
+            if config.CONTROL_MODERN_STABILIZATION:
                 voltage = self.compute_modern_stabilize(theta, theta_dot, alpha, alpha_dot, theta_target, alpha_target)
             else:
                 voltage = self.compute_traditional_stabilize(theta, theta_dot, alpha, alpha_dot, theta_target, alpha_target)
-        
+            
+            # Check if pendulum has fallen down during stabilization
+            if not self.swingup.is_upright(alpha):
+                if config.DEBUG: print("[Controller] Pendulum fell down. Switching back to swing-up mode.")
+                self.swingup.phase = self.swingup.PHASE_INIT # Reset swing-up phase
+                self.mode = "swingup"
+
         return voltage, self.mode
