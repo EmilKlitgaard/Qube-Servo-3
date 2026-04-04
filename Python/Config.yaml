@@ -5,30 +5,24 @@ UART:
   BAUDRATE: 19200
 
 QUBE:
-  SIMULATION: true
-  VISUALIZE: true
-  MODERN_STABILIZATION: true
-  SIMULATION_SPEED: 1  # 1.0 = real time, 0.5 = half speed
+  SIMULATION: true              # Whether to use MuJoCo simulation (true) or real hardware (false)
+  VISUALIZE: true               # Whether to launch MuJoCo viewer (only applies if SIMULATION is true)
+  SIMULATION_SPEED: 1.0         # 1.0 = real time, 0.5 = half speed
 
 CONTROL:
-  # Control loop timing
-  dt: 0.001                    # Control timestep [s] (1 kHz)
-  duration: null               # Maximum simulation duration [s], set to null for unlimited
-  
-  # Swing-up thresholds
-  swingup_alpha_threshold: 0.3         # Pendulum angle threshold for mode switch [rad]
-  swingup_alpha_dot_threshold: 2.0     # Pendulum velocity threshold for mode switch [rad/s]
-
+  DT: 0.001                     # Control timestep [s] (1 kHz)
+  DURATION: null                # Maximum simulation duration [s], set to null for unlimited
+  MODERN_STABILIZATION: true    # Use modern stabilization method (true) or traditional method (false)
 
 PLANT:
   # Physical/simulation parameters
-  motor_constant: 0.05         # Motor torque constant [Nm/V]
-  arm_length: 0.085            # Distance from pivot to encoder axis [m]
-  pendulum_length: 0.129       # Length of pendulum rod [m]
-  arm_mass: 0.15               # Mass of arm [kg]
-  pendulum_mass: 0.05          # Mass of pendulum [kg]
-  gravity: 9.82                # Gravitational acceleration [m/s^2]
+  MOTOR_CONSTANT: 0.05          # Motor torque constant [Nm/V]
+  ARM_LENGTH: 0.085             # Distance from pivot to encoder axis [m]
+  PENDULUM_LENGTH: 0.129        # Length of pendulum rod [m]
+  ARM_MASS: 0.15                # Mass of arm [kg]
+  PENDULUM_MASS: 0.05           # Mass of pendulum [kg]
+  GRAVITY: 9.82                 # Gravitational acceleration [m/s^2]
   
   # Voltage limits
-  voltage_max: 10.0            # Maximum motor voltage [V]
-  voltage_min: -10.0           # Minimum motor voltage [V]
+  VOLTAGE_MAX: 10.0             # Maximum motor voltage [V]
+  VOLTAGE_MIN: -10.0            # Minimum motor voltage [V]

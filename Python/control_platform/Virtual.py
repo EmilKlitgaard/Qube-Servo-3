@@ -21,6 +21,7 @@ Following MuJoCo documentation best practices:
 
 import os
 import math
+import time
 import mujoco
 
 from Config import config
@@ -56,8 +57,8 @@ class Virtual(QubeInterface):
     motor_constant : Motor torque constant [Nm/V]. Default 0.05 Nm/V.
     """
 
-    def __init__(self, dt: float = 0.001, motor_constant: float = 0.05):
-        """Initialize the MuJoCo simulator."""
+    def __init__(self, dt: float = config.CONTROL_DT, motor_constant: float = config.PLANT_MOTOR_CONSTANT):
+        """ Initialize the MuJoCo simulator. """
         self.dt = dt
         self.motor_constant = motor_constant
         self.enabled = False
@@ -71,20 +72,26 @@ class Virtual(QubeInterface):
         # MuJoCo objects (following docs: separate model and data)
         self.model: Optional[mujoco.MjModel] = None
         self.data: Optional[mujoco.MjData] = None
+        self.viewer = None  # Reference to passive viewer (None if visualization disabled)
 
-        # Joint indices (found after model load)
-        self.theta_joint_id: Optional[int] = None
-        self.alpha_joint_id: Optional[int] = None
-        self.motor_actuator_id: Optional[int] = None
+        # Named accessors (using modern API instead of mj_name2id)
+        self.theta_joint = None
+        self.alpha_joint = None
+        self.motor_actuator = None
 
         # Set startup states for beta and alpha (arm at center, pendulum down)
         self.startup_theta = 0.0
         self.startup_alpha = 0.0
 
-        # Target state (used for tracking control)
+        # Target state
         self.target_theta = 0.0
         self.target_alpha = 0.0
 
+        # Timing variables for real-time control
+        self.run_time = 0.0
+        self.tick_time = self.dt / config.QUBE_SIMULATION_SPEED
+        self.target_time = time.time()   # Target time for next step (enables catch-up if falling behind)
+    
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
     def open(self) -> None:
@@ -109,30 +116,34 @@ class Virtual(QubeInterface):
         except Exception as e:
             raise RuntimeError(f"\nFailed to load MuJoCo model: {e}")
 
-        # Step 4: Find joint and actuator IDs by name (Per docs: mj_name2id maps element names to integer ids)
-        self.theta_joint_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, "theta")
-        self.alpha_joint_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, "alpha")
-        self.motor_actuator_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, "arm_motor")
+        # Step 4: Find joint and actuator using modern named access API (Per docs: O(1) performance)
+        self.theta_joint = self.model.joint('theta')
+        self.alpha_joint = self.model.joint('alpha')
+        self.motor_actuator = self.model.actuator('arm_motor')
 
-        if self.theta_joint_id < 0 or self.alpha_joint_id < 0 or self.motor_actuator_id < 0:
+        # Step 5: Forward kinematics: Compute all body positions and orientations
+        mujoco.mj_forward(self.model, self.data)
+
+        if self.theta_joint is None or self.alpha_joint is None or self.motor_actuator is None:
             raise RuntimeError("Could not find required joints or actuators in MuJoCo model")
 
         if config.DEBUG:
             print(f"[Virtual] MuJoCo model loaded from {model_file_path}")
-            print(f"[Virtual] Found theta_id={self.theta_joint_id}, alpha_id={self.alpha_joint_id}, motor_id={self.motor_actuator_id}")
+            print(f"[Virtual] Found theta_joint, alpha_joint, and arm_motor actuators")
 
 
     def close(self) -> None:
         """
         Shut down the simulator.
-        
-        Per MuJoCo docs: resources are automatically freed when structures go out of scope, but explicit cleanup is good practice.
+        Per MuJoCo docs: Resources are automatically freed when structures go out of scope.
         """
         if self.data is not None:
             self.write(0.0)
             self.enable(False)
+            self.data = None
+
         self.model = None
-        self.data = None
+        self.viewer = None
         print("[Virtual] MuJoCo simulator closed.")
 
 
@@ -149,20 +160,19 @@ class Virtual(QubeInterface):
         if self.model is None or self.data is None:
             raise RuntimeError("Simulator not open. Call open() first.")
 
-        # Set initial generalized coordinates (qpos)
-        self.data.qpos[self.theta_joint_id] = self.startup_theta       # theta = 0 (center)
-        self.data.qpos[self.alpha_joint_id] = self.startup_alpha       # alpha = 0 (upright)
+        # Set initial generalized coordinates (qpos) using named access
+        self.data.joint('theta').qpos = self.startup_theta       # theta = 0 (center)
+        self.data.joint('alpha').qpos = self.startup_alpha       # alpha = 0 (upright)
 
         # Zero all generalized velocities (qvel)
         self.data.qvel[:] = 0.0
 
         # Reset internal state
         self.voltage_demand = 0.0
-        self.enabled = False
 
-        # Forward kinematics: compute all body positions and orientations
-        # Per docs: this "provides the basis for all subsequent computations"
-        mujoco.mj_forward(self.model, self.data)
+        # Reset target time
+        self.target_time = time.time()
+
         print("[Virtual] Simulation reset.")
 
 
@@ -175,14 +185,16 @@ class Virtual(QubeInterface):
 
 
     def set_led(self, r: float, g: float, b: float) -> None:
-        """Set LED state and update visualization color."""
+        """Set LED state and update visualization color (thread-safe with viewer lock)."""
         self.led_r = max(0.0, min(1.0, r))
         self.led_g = max(0.0, min(1.0, g))
         self.led_b = max(0.0, min(1.0, b))
 
-        if config.QUBE_VISUALIZE and self.model is not None:
-            color_index = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_MATERIAL, "led")
-            self.model.mat_rgba[color_index] = [self.led_r, self.led_g, self.led_b, 0.5]
+        # Per MuJoCo docs: must acquire viewer lock before modifying model state
+        if config.QUBE_VISUALIZE and self.model is not None and self.viewer is not None:
+            with self.viewer.lock():
+                led_material = self.model.material('led')
+                led_material.rgba = [self.led_r, self.led_g, self.led_b, 0.5]
 
 
     def enable(self, on: bool) -> None:
@@ -197,16 +209,10 @@ class Virtual(QubeInterface):
     # ── Control loop ───────────────────────────────────────────────────────────
     def read(self) -> Tuple[float, float, float, float]:
         """
-        Step the simulation and return the current state.
+        Read the current simulation state without stepping physics.
         
-        Per MuJoCo documentation: mj_step is the top-level function which:
-        1. Applies controls to actuators
-        2. Computes forward dynamics
-        3. Advances state by one timestep
-        4. Computes forward kinematics
-
-        The simulator advances by one control step (dt). Joint velocities are
-        computed as (q_new - q_old) / dt for consistency.
+        Per MuJoCo documentation: mj_step has already been called in write(),
+        so mjData contains the current velocities (qvel) and positions (qpos).
 
         Returns
         -------
@@ -218,54 +224,72 @@ class Virtual(QubeInterface):
         if self.model is None or self.data is None:
             raise RuntimeError("Simulator not open. Call open() first.")
 
-        # Save old state
-        theta_old = self.data.qpos[self.theta_joint_id]
-        alpha_old = self.data.qpos[self.alpha_joint_id]
+        # Get current state from mjData using named access (velocities computed by previous mj_step)
+        theta = self.data.joint('theta').qpos.item()
+        theta_dot = self.data.joint('theta').qvel.item()
+        
+        alpha_raw = self.data.joint('alpha').qpos.item()
+        alpha_dot_raw = self.data.joint('alpha').qvel.item()
 
+        # Angle convention transformation:
+        alpha = math.pi - alpha_raw
+        alpha_dot = -alpha_dot_raw  # Velocity sign reversal due to the inversion
+
+        # Wrap alpha to [0, 2π)
+        alpha %= (math.radians(360))
+
+        # Clamp theta to [-π/2, π/2] (joint also limited in MJCF)
+        theta = max(-math.pi / 2, min(math.pi / 2, theta))
+
+        return theta, theta_dot, alpha, alpha_dot
+
+
+    def write(self, voltage: float) -> None:
+        """
+        Apply a motor voltage command and advance the simulation.
+        
+        Per MuJoCo documentation: mj_step is the top-level function which:
+        1. Applies controls to actuators
+        2. Computes forward dynamics
+        3. Advances state by one timestep
+        4. Computes forward kinematics
+
+        The simulator advances by one control step (dt). After this call,
+        the next read() will return the updated state and velocities.
+
+        Parameters
+        ----------
+        voltage : Desired motor voltage [V]. Saturated to ±10 V.
+        """
+        if self.model is None or self.data is None:
+            raise RuntimeError("Simulator not open. Call open() first.")
+        
+        # Store and saturate voltage to amplifier limit
+        self.voltage_demand = max(config.PLANT_VOLTAGE_MIN, min(config.PLANT_VOLTAGE_MAX, voltage))
+        
         # Apply control: convert voltage to torque
         if self.enabled:
             torque = self.voltage_demand * self.motor_constant
         else:
             torque = 0.0
 
-        # Set actuator control (gear ratio is 1.0 in MJCF, so ctrl = torque / gear)
-        self.data.ctrl[self.motor_actuator_id] = torque
+        # Set actuator control using named access
+        self.data.actuator('arm_motor').ctrl = torque
 
-        # Step the simulation (per docs: top-level function advancing all computations)
+        # Step the simulation
         mujoco.mj_step(self.model, self.data)
 
-        # Get new state from mjData
-        theta_new = self.data.qpos[self.theta_joint_id]
-        alpha_new = self.data.qpos[self.alpha_joint_id]
-
-        # Finite-difference velocities for consistency
-        theta_dot = (theta_new - theta_old) / self.dt
-        # For alpha, we compute the raw velocity from MuJoCo (qvel set by mj_step)
-        alpha_dot_raw = self.data.qvel[self.alpha_joint_id]
-
-        # Angle convention transformation:
-        alpha_returned = math.pi - alpha_new
-        # Velocity sign reversal due to the inversion
-        alpha_dot = -alpha_dot_raw
-
-        # Clamp theta to [-π/2, π/2] (joint also limited in MJCF)
-        theta = max(-math.pi / 2, min(math.pi / 2, theta_new))
-
-        return theta, theta_dot, alpha_returned, alpha_dot
-
-
-    def write(self, voltage: float) -> None:
-        """
-        Apply a motor voltage command.
-
-        The voltage is saturated to ±10 V and stored for the next read() call.
-
-        Parameters
-        ----------
-        voltage : Desired motor voltage [V].
-        """
-        if self.model is None:
-            raise RuntimeError("Simulator not open. Call open() first.")
-
-        # Saturate voltage to amplifier limit
-        self.voltage_demand = max(config.PLANT_voltage_min, min(config.PLANT_voltage_max, voltage))
+        # Update real-time timing with active catch-up
+        self.run_time += self.dt
+        self.target_time += self.tick_time
+        self.sleep_time = self.target_time - time.time()
+        if self.sleep_time > 0:
+            # Ahead of schedule: Sleep to maintain timing
+            time.sleep(self.sleep_time)
+        elif config.DEBUG and self.sleep_time < -self.tick_time * 0.1:
+            # Behind schedule: Report lag and skip sleep to catch up on next iteration
+            print(f"[Control] Behind: {-self.sleep_time*1000:.1f}ms (catching up...)")
+        
+        # Sync viewer if active - picks up both state and model changes (LEDs)
+        if self.viewer is not None:
+            self.viewer.sync()

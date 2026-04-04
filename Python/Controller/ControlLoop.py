@@ -20,6 +20,21 @@ from controller import Controller
 from control_platform import QubeInterface
 
 
+def update_led(theta: float, theta_dot: float, alpha: float, alpha_dot: float, mode: str, iteration: int, qube: QubeInterface) -> None:
+    """ Update the RGB LED based on the current mode and state. """
+    # LED feedback based on mode
+    if mode == "swingup":
+        qube.set_led(1.0, 0.5, 0.0)  # Orange: swinging up
+    else:
+        if on_target(theta, theta_dot, alpha, alpha_dot, qube.target_theta, qube.target_alpha):
+            qube.set_led(0.0, 1.0, 0.0)  # Green: stabilized
+        else:
+            if iteration % 5 == 0:  # Flash Blue: moving to target
+                qube.set_led(0.0, 0.0, 0.0)  # Off
+            else:
+                qube.set_led(0.0, 0.0, 1.0)  # Blue
+
+
 def on_target(theta: float, theta_dot: float, alpha: float, alpha_dot: float, theta_target: float = 0.0, alpha_target: float = 0.0) -> bool:
     """
     Check if the system is on target (pendulum upright and arm centered) and all joints are stationary.
@@ -64,23 +79,15 @@ def run_controller(qube: QubeInterface, duration: float = None) -> None:
     Stabilizes the pendulum upright (alpha = 0) and centers the arm (theta = 0).
     Uses a combined swing-up + LQR stabilization controller.
     
+    The simulation speed is controlled via config.QUBE_SIMULATION_SPEED:
+    - 1.0 = real-time (each physics step takes dt seconds in wall-clock time)
+    - 0.5 = half speed (each physics step takes 2*dt seconds in wall-clock time)
+    
     Parameters
     ----------
     qube : Either a Virtual (MuJoCo) or Physical (real hardware) interface.
     duration : Maximum runtime [s]. If None, runs until interrupted. Default: None.
     """
-    
-    # Initialize visualizer if requested (only for Virtual simulator)
-    viewer = None
-    if config.QUBE_SIMULATION and config.QUBE_VISUALIZE:
-        try:
-            import mujoco.viewer
-            if config.DEBUG: print("[Control] Launching MuJoCo viewer...")
-            viewer = mujoco.viewer.launch_passive(qube.model, qube.data)
-            if config.DEBUG: print("[Control] Viewer launched.")
-        except Exception as e:
-            print(f"[Control] Warning: Could not launch viewer: {e}")
-            viewer = None
     
     # Initialize controller
     controller = Controller()
@@ -92,66 +99,66 @@ def run_controller(qube: QubeInterface, duration: float = None) -> None:
     
     if config.DEBUG:
         print("[Control] Starting control loop...")
-        print(f"[Control] Control timestep: {controller.dt * 1000:.1f} ms")
+        print(f"[Control] Physics timestep: {controller.dt * 1000:.1f} ms")
+        print(f"[Control] Simulation speed: {config.QUBE_SIMULATION_SPEED}x")
+        print(f"[Control] Wall-clock timestep: {controller.dt * 1000 / config.QUBE_SIMULATION_SPEED:.1f} ms")
         print(f"[Control] Duration: {duration if duration is not None else 'unlimited'} s\n")
     
-    input("\nPress ENTER to start control loop...") # Await for enter to start control loop
+    # Initialize visualizer if enabled (only for Virtual simulator)
+    viewer = None
+    if config.QUBE_SIMULATION and config.QUBE_VISUALIZE:
+        try:
+            import mujoco.viewer
+            if config.DEBUG: print("[Control] Launching MuJoCo viewer...")
+            # Launch passive viewer with model and data from qube
+            viewer = mujoco.viewer.launch_passive(qube.model, qube.data)
+            qube.viewer = viewer
+            if config.DEBUG: print("[Control] Viewer launched.\n")
+        except Exception as e:
+            print(f"[Control] Warning: Could not launch viewer: {e}")
+            print(f"[Control] On macOS, ensure you run via 'mjpython' launcher.\n")
+            viewer = None
+
+    # Await for enter to start control loop
+    input("\nPress ENTER to start control loop...")
+    qube.reset() # Reset again to reset time
     
     # Control loop
     try:
-        # Initialize timing
-        t = 0.0
+        # Timing variables for real-time control
         iteration = 0
-        start_time = time.time()
 
         while True:
             # Check exit condition
-            if duration is not None and t > duration:
+            if duration is not None and qube.run_time > duration:
                 if config.DEBUG: print(f"[Control] Duration of {duration} s reached. Exiting control loop.")
                 break
-            
-            # Check if viewer is still running (passive mode)
+
+            # Check if viewer is still running
             if viewer is not None and not viewer.is_running():
                 if config.DEBUG: print("[Control] Viewer window closed.")
                 break
             
             # Read current state
             theta, theta_dot, alpha, alpha_dot = qube.read()
-
-            # Wrap alpha to [0, 2π)
-            alpha = alpha % (math.radians(360))
             
-            # Compute control (pass targets from qube)
+            # Compute control from controller
             voltage, mode = controller.compute(theta, theta_dot, alpha, alpha_dot, qube.target_theta, qube.target_alpha)
             
             # Apply control
             qube.write(voltage)
             
-            # Sync viewer if active (user responsible for syncing in passive mode)
-            if viewer is not None:
-                viewer.sync()
+            # Update LED based on current state and mode
+            update_led(theta, theta_dot, alpha, alpha_dot, mode, iteration, qube)
             
-            # Update elapsed time
-            t = time.time() - start_time
+            # Increment iteration counter
             iteration += 1
             
             # Periodic status output
             if config.DEBUG and (iteration % 100) == 0:
-                print(f"[{t:.2f}s] Theta: {math.degrees(theta):+.4f}°, alpha: {math.degrees(alpha):+.4f}°, voltage: {voltage:+.2f}V, mode: {mode}")
-            
-            # LED feedback based on mode
-            if mode == "swingup":
-                qube.set_led(1.0, 0.5, 0.0)  # Orange: swinging up
-            else:
-                if on_target(theta, theta_dot, alpha, alpha_dot, qube.target_theta, qube.target_alpha):
-                    qube.set_led(0.0, 1.0, 0.0)  # Green: stabilized
-                else:
-                    if iteration % 5 == 0:  # Flash Blue: moving to target
-                        qube.set_led(0.0, 0.0, 0.0)  # Off
-                    else:
-                        qube.set_led(0.0, 0.0, 1.0)  # Blue
+                print(f"[{qube.run_time:.2f}s] \tTheta: {math.degrees(theta):+.4f}°, \talpha: {math.degrees(alpha):+.4f}°, \tvoltage: {voltage:+.2f}V, \tmode: {mode}")
 
-        if config.DEBUG: print(f"\n[Control] Control loop completed after {t:.2f} s")
+        if config.DEBUG: print(f"\n[Control] Control loop completed after {qube.run_time:.2f} s (simulation time)")
     
     except KeyboardInterrupt:
         if config.DEBUG: print("\n[Control] Interrupted by user (Ctrl+C)")
@@ -159,10 +166,7 @@ def run_controller(qube: QubeInterface, duration: float = None) -> None:
     finally:
         # Close viewer if active
         if viewer is not None:
-            try:
-                viewer.close()
-            except:
-                pass
+            viewer.close()
         
         # Shutdown sequence
         if config.DEBUG: print("[Control] Shutting down...")

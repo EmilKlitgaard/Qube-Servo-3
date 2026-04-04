@@ -8,6 +8,7 @@ try:
 except ImportError:
     _QUANSER_AVAILABLE = False
 
+from Config import config
 from .QubeInterface import QubeInterface
 
 
@@ -53,13 +54,13 @@ class Physical(QubeInterface):
 
     Parameters
     ----------
-    freq      : Control-loop frequency [Hz].  Drives the derivative filter.
+    dt        : Control-loop timestep [s].  Drives the derivative filter.
     filter_bw : Derivative filter bandwidth [rad/s]  (default: 100 rad/s).
-    """
+    """ 
 
-    def __init__(self, freq: float = 500.0, filter_bw: float = 100.0):
-        self._freq    = freq
-        self._Ts      = 1.0 / freq
+    def __init__(self, dt: float = config.CONTROL_DT, filter_bw: float = 100.0):
+        self._freq    = 1.0 / dt
+        self._Ts      = dt
         self._filt_bw = filter_bw
 
         self._card    = None
