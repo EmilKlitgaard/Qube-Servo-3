@@ -18,6 +18,7 @@ import math
 from Config import config
 from controller import Controller
 from control_platform import QubeInterface
+from data import Logger, Plotter
 
 
 def update_led(theta: float, theta_dot: float, alpha: float, alpha_dot: float, mode: str, iteration: int, qube: QubeInterface) -> None:
@@ -72,7 +73,7 @@ def on_target(theta: float, theta_dot: float, alpha: float, alpha_dot: float, th
     return theta_on_target and alpha_on_target and theta_dot_on_target and alpha_dot_on_target
 
 
-def run_controller(qube: QubeInterface, duration: float = None) -> None:
+def run_controller(qube: QubeInterface, logger: Logger, plotter: Plotter, duration: float = None) -> None:
     """
     Run the main control loop for the Qube-Servo 3.
     
@@ -86,24 +87,20 @@ def run_controller(qube: QubeInterface, duration: float = None) -> None:
     Parameters
     ----------
     qube : Either a Virtual (MuJoCo) or Physical (real hardware) interface.
+    logger : Data logger instance.
+    plotter : 2D plotter instance.
     duration : Maximum runtime [s]. If None, runs until interrupted. Default: None.
     """
     
     # Initialize controller
     controller = Controller()
-    
-    # Initialize hardware
-    qube.reset()
-    qube.set_led(1.0, 1.0, 0.0)  # Yellow: initializing
-    qube.enable(True)
-    
     if config.DEBUG:
         print("[Control] Starting control loop...")
         print(f"[Control] Physics timestep: {controller.dt * 1000:.1f} ms")
         print(f"[Control] Simulation speed: {config.QUBE_SIMULATION_SPEED}x")
-        print(f"[Control] Wall-clock timestep: {controller.dt * 1000 / config.QUBE_SIMULATION_SPEED:.1f} ms")
+        print(f"[Control] Timestep: {controller.dt * 1000 / config.QUBE_SIMULATION_SPEED:.1f} ms")
         print(f"[Control] Duration: {duration if duration is not None else 'unlimited'} s\n")
-    
+
     # Initialize visualizer if enabled (only for Virtual simulator)
     viewer = None
     if config.QUBE_SIMULATION and config.QUBE_VISUALIZE:
@@ -121,11 +118,14 @@ def run_controller(qube: QubeInterface, duration: float = None) -> None:
 
     # Await for enter to start control loop
     input("\nPress ENTER to start control loop...")
-    qube.reset() # Reset again to reset time
+
+    # Initialize hardware
+    qube.reset()
+    qube.set_led(1.0, 1.0, 0.0)  # Yellow: initializing
+    qube.enable(True)
     
     # Control loop
     try:
-        # Timing variables for real-time control
         iteration = 0
 
         while True:
@@ -148,6 +148,17 @@ def run_controller(qube: QubeInterface, duration: float = None) -> None:
             # Apply control
             qube.write(voltage)
             
+            # Log data if logging enabled
+            if logger is not None:
+                logger.log(
+                    time=qube.run_time,
+                    theta=theta,
+                    theta_dot=theta_dot,
+                    alpha=alpha,
+                    alpha_dot=alpha_dot,
+                    voltage=voltage
+                )
+            
             # Update LED based on current state and mode
             update_led(theta, theta_dot, alpha, alpha_dot, mode, iteration, qube)
             
@@ -168,10 +179,13 @@ def run_controller(qube: QubeInterface, duration: float = None) -> None:
         if viewer is not None:
             viewer.close()
         
+        # Close plotter if enabled (will print statistics)
+        if plotter is not None:
+            plotter.close()
+        
         # Shutdown sequence
         if config.DEBUG: print("[Control] Shutting down...")
         qube.write(0.0)
         qube.set_led(1.0, 0.0, 0.0)  # Red: shutdown
         qube.enable(False)
         qube.close()
-        if config.DEBUG: print("[Control] Done.")
