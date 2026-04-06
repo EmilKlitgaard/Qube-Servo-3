@@ -27,8 +27,6 @@ import mujoco
 from Config import config
 from typing import Tuple, Optional
 from control_platform import QubeInterface
-from controller import Controller, SwingUp
-
 
 # ── Model file path ────────────────────────────────────────────────────────────
 def get_model_file_path() -> str:
@@ -91,6 +89,8 @@ class Virtual(QubeInterface):
         self.run_time = 0.0
         self.tick_time = self.dt / config.QUBE_SIMULATION_SPEED
         self.target_time = time.time()   # Target time for next step (enables catch-up if falling behind)
+
+        if config.DEBUG: print("[Virtual] Simulator initialized")
     
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -129,7 +129,6 @@ class Virtual(QubeInterface):
 
         if config.DEBUG:
             print(f"[Virtual] MuJoCo model loaded from {model_file_path}")
-            print(f"[Virtual] Found theta_joint, alpha_joint, and arm_motor actuators")
 
 
     def close(self) -> None:
@@ -265,7 +264,7 @@ class Virtual(QubeInterface):
             raise RuntimeError("Simulator not open. Call open() first.")
         
         # Store and saturate voltage to amplifier limit
-        self.voltage_demand = max(config.PLANT_VOLTAGE_MIN, min(config.PLANT_VOLTAGE_MAX, voltage))
+        self.voltage_demand = max(config.CONTROL_VOLTAGE_MIN, min(config.CONTROL_VOLTAGE_MAX, voltage))
         
         # Apply control: convert voltage to torque
         if self.enabled:
@@ -290,6 +289,6 @@ class Virtual(QubeInterface):
             # Behind schedule: Report lag and skip sleep to catch up on next iteration
             print(f"[Control] Behind: {-self.sleep_time*1000:.1f}ms (catching up...)")
         
-        # Sync viewer if active - picks up both state and model changes (LEDs)
+        # Sync viewer if active
         if self.viewer is not None:
             self.viewer.sync()
