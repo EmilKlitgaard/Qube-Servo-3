@@ -5,7 +5,7 @@ from Config import config
 
 class UART:
     def __init__(self, port: str, baudrate: int = 19200, data_bits: int = 8, parity: str = 'N', stop_bits: int = 1, timeout: float = 1.0):
-        print(f"Connecting to UART port '{port}' with {baudrate} baud...")
+        print(f"[UART] Connecting to UART port '{port}' with {baudrate} baud...")
         try:
             self.serial = serial.Serial(
                 port=port,
@@ -18,16 +18,15 @@ class UART:
         except serial.SerialException as e:
             error_msg = str(e).lower()
             if "no such file" in error_msg or "could not open port" in error_msg:
-                print(f"Error: Port '{port}' not found. Is the device plugged in?")
+                print(f"[UART] Error: Port '{port}' not found. Is the device plugged in?")
                 list_ports()
             elif "permission denied" in error_msg or "access is denied" in error_msg:
-                print(f"Error: Port '{port}' is occupied or permission denied.")
-                print("Close any other program using the port (e.g. another terminal, IDE serial monitor).")
+                print(f"[UART] Error: Port '{port}' is occupied or permission denied. Close any other program using the port (e.g. another terminal, IDE serial monitor).")
             else:
-                print(f"Error opening port '{port}': {e}")
+                print(f"[UART] Error opening port '{port}': {e}")
             raise 
         self.last_data = None
-        if config.DEBUG: print("[UART class initialized]\n")
+        if config.DEBUG: print("[[UART] UART class initialized]\n")
 
     def read_line(self) -> str | None:
         """Read one line (decoded as UTF-8, stripped of whitespace)."""
@@ -39,7 +38,7 @@ class UART:
 
     def loop(self):
         """Continuously print incoming UART data. Press Ctrl+C to stop."""
-        print(f"Listening on {self.serial.port} at {self.serial.baudrate} baud.")
+        print(f"[UART] Listening on {self.serial.port} at {self.serial.baudrate} baud.")
         try:
             while True:
                 line = self.read_line()
@@ -59,7 +58,7 @@ class UART:
 
 def list_ports():
     """Helper to list all available serial ports."""
-    print("Available serial ports:")
+    print("[UART] Available serial ports:")
     ports = serial.tools.list_ports.comports()
     for p in ports:
         print(f"  {p.device} — {p.description}")

@@ -1,14 +1,17 @@
 DEBUG: true
 
+GUI:
+  ENABLED: true                 # Whether to enable the GUI (Only applies if VISUALIZE is false)
+  UPDATE_RATE: 100                # GUI update rate in Hz (only applies if ENABLED is true)
+
 UART:
   PORT: /dev/cu.usbmodem0E2208FC1
   BAUDRATE: 19200
 
 QUBE:
   SIMULATION: true              # Whether to use MuJoCo simulation (true) or real hardware (false)
-  VISUALIZE: true               # Whether to launch MuJoCo viewer (only applies if SIMULATION is true)
+  VISUALIZE: false              # Whether to launch MuJoCo viewer (only applies if SIMULATION is true)
   SIMULATION_SPEED: 1.0         # 1.0 = real time, 0.5 = half speed
-  LOGGING: true                 # Whether to log data for plotting
 
 CONTROL:
   DT: 0.001                     # Control timestep [s] (1 kHz)
@@ -30,4 +33,4 @@ PLANT:
 
 DATA:
   LOGGING: true                 # Whether to log data for plotting
-  PLOTTING: true                    # Whether to enable plotting after simulation
+  PLOTTING: true                # Whether to enable plotting after simulation (Requires LOGGING to be true)
