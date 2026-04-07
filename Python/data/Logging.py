@@ -45,6 +45,18 @@ class Logger:
     def get_size(self) -> int:
         """Return number of logged timesteps."""
         return len(self.time_history)
+    
+    
+    def get_data_slice(self, start_index: int = 0) -> dict:
+        """Get data slice from start_index to end (for incremental plotting)."""
+        return {
+            'time': self.time_history[start_index:],
+            'theta': self.theta_history[start_index:],
+            'theta_dot': self.theta_dot_history[start_index:],
+            'alpha': self.alpha_history[start_index:],
+            'alpha_dot': self.alpha_dot_history[start_index:],
+            'voltage': self.voltage_history[start_index:]
+        }
 
 
     def get_data(self) -> dict:

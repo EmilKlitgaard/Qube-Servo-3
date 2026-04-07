@@ -75,6 +75,8 @@ class Physical(QubeInterface):
         # Derivative filter state  [u_prev, y_prev]
         self._ddt_state = np.zeros(2, dtype=np.float64)
 
+        self.theta_target = 0.0
+
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
     def open(self) -> None:

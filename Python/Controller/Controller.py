@@ -100,11 +100,12 @@ class Controller:
         alpha_wrapped = math.atan2(math.sin(alpha), math.cos(alpha))
     
         # PD control: u = -Kp * alpha_error - Kd * alpha_dot
-        Kp = 20.0  # Proportional gain for angle error
-        Kd = 1.5   # Derivative gain for angular velocity
+        Kp = 50.0  # Proportional gain for angle error
+        Kd = 10.0   # Derivative gain for angular velocity
         error = (-Kp * alpha_wrapped) - (Kd * alpha_dot)
         
         voltage = error
+        voltage *= -1.0  # Invert control direction if needed
 
         return voltage
 
