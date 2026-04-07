@@ -7,7 +7,7 @@ import threading
 from Config import config
 from controller import run_controller
 from tiva_microcontroller.UART import UART
-from control_platform import Physical, Virtual
+from control_platform import QubeInterface, Physical, Virtual
 
 
 # ╔═══════════════════════════════════════════════════╗
@@ -46,7 +46,7 @@ def validate_environment():
 # ╚═══════════════════════════════════════════════════╝
 
 # ── UART Thread ────────────────────────────────────────────────────────────
-def uart_loop(stop_event: threading.Event) -> None:
+def uart_loop(qube: QubeInterface, stop_event: threading.Event) -> None:
     print("[Thread] started new thread:", threading.current_thread().name)
 
     uart = None
@@ -65,8 +65,9 @@ def uart_loop(stop_event: threading.Event) -> None:
                 time.sleep(10)
                 while not stop_event.is_set():
                     input("\nPress ENTER to set a new random theta target...\n")
-                    theta_target = math.radians(random.uniform(-45, 45))
-                    if config.DEBUG: print(f"[Test] Setting theta target to {math.degrees(theta_target):.1f}°")
+                    target_theta = math.radians(random.uniform(-45, 45))
+                    qube.set_target(target_theta, 0.0)
+                    if config.DEBUG: print(f"[Test] Setting theta target to {math.degrees(target_theta):.1f}°")
                     time.sleep(0.1)
             
             thread = threading.Thread(
@@ -80,12 +81,9 @@ def uart_loop(stop_event: threading.Event) -> None:
         # ---------- TESTING MODE END ----------
 
     try:
-        while not stop_event.is_set():
-            if uart is not None:
-                line = uart.read_line()
-                if line:
-                    if config.DEBUG: print(f"[UART] {line}")
-            time.sleep(0.1)
+        if uart is not None:
+            print("[UART] UART thread running. Listening for incoming data...")
+            uart.loop(qube, stop_event)
 
     except Exception as e:
         print(f"[Thread] Error in UART loop: {e}")
@@ -102,10 +100,8 @@ def uart_loop(stop_event: threading.Event) -> None:
 
 
 # ── Control Thread ────────────────────────────────────────────────────────────
-def control_loop(qube, logger, stop_event: threading.Event) -> None:
+def control_loop(qube: QubeInterface, logger, stop_event: threading.Event) -> None:
     print("[Thread] started new thread:", threading.current_thread().name)
-
-    #validate_environment()
 
     # Run control loop (will block until completion or interruption)
     try:
@@ -161,7 +157,7 @@ def main():
     if config.DEBUG: print("[Main] Initializing UART thread...")
     uart_thread = threading.Thread(
         target=uart_loop,
-        args=(stop_event,),
+        args=(qube, stop_event,),
         name="UARTThread",
         daemon=True
     )
