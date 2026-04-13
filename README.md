@@ -10,7 +10,7 @@ Real-time swing-up and stabilization control system for the Quanser QUBE-Servo 3
 
 ### Installation
 ```bash
-git clone EmilKlitgaard/Qube-Servo-3
+git clone git@github.com:EmilKlitgaard/Qube-Servo-3.git
 cd Qube-Servo-3/Python
 python3 -m venv venv
 source venv/bin/activate
