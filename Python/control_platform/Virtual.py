@@ -57,12 +57,13 @@ class Virtual(QubeInterface):
 
     def __init__(self, dt: float = config.CONTROL_DT, motor_constant: float = config.PLANT_MOTOR_CONSTANT):
         """ Initialize the MuJoCo simulator. """
-        self.dt = dt
-        self.motor_constant = motor_constant
-        self.enabled = False
-        self.voltage_demand = 0.0
+        # Initialize parrent class
+        super().__init__(motor_constant)  
 
-        # LED state
+        # Simulator parameters
+        self.dt = dt
+
+        # LED states
         self.led_r = 0.0
         self.led_g = 0.0
         self.led_b = 0.0
@@ -80,10 +81,6 @@ class Virtual(QubeInterface):
         # Set startup states for beta and alpha (arm at center, pendulum down)
         self.startup_theta = 0.0
         self.startup_alpha = 0.0
-
-        # Target state
-        self.target_theta = 0.0
-        self.target_alpha = 0.0
 
         # Timing variables for real-time control
         self.run_time = 0.0
@@ -127,8 +124,7 @@ class Virtual(QubeInterface):
         if self.theta_joint is None or self.alpha_joint is None or self.motor_actuator is None:
             raise RuntimeError("Could not find required joints or actuators in MuJoCo model")
 
-        if config.DEBUG:
-            print(f"[Virtual] MuJoCo model loaded from {model_file_path}")
+        if config.DEBUG: print(f"[Virtual] MuJoCo model loaded from {model_file_path}")
 
 
     def close(self) -> None:
@@ -156,6 +152,9 @@ class Virtual(QubeInterface):
         - Pendulum at upright position (alpha = 0)
         - All velocities zeroed
         """
+        # Reset parrent class
+        super().reset()
+
         if self.model is None or self.data is None:
             raise RuntimeError("Simulator not open. Call open() first.")
 
@@ -166,21 +165,10 @@ class Virtual(QubeInterface):
         # Zero all generalized velocities (qvel)
         self.data.qvel[:] = 0.0
 
-        # Reset internal state
-        self.voltage_demand = 0.0
-
         # Reset target time
         self.target_time = time.time()
 
         print("[Virtual] Simulation reset.")
-
-
-    def set_target(self, theta: float, alpha: float) -> None:
-        """Set the target state for the controller to track."""
-        self.target_theta = theta
-        self.target_alpha = alpha
-        if config.DEBUG:
-            print(f"[Virtual] New target: theta={math.degrees(theta):.1f}°, alpha={math.degrees(alpha):.1f}°")
 
 
     def set_led(self, r: float, g: float, b: float) -> None:
@@ -194,15 +182,6 @@ class Virtual(QubeInterface):
             with self.viewer.lock():
                 led_material = self.model.material('led')
                 led_material.rgba = [self.led_r, self.led_g, self.led_b, 0.5]
-
-
-    def enable(self, on: bool) -> None:
-        """Enable or disable the motor."""
-        if on:
-            self.enabled = True
-        else:
-            self.enabled = False
-            self.voltage_demand = 0.0
 
 
     # ── Control loop ───────────────────────────────────────────────────────────
@@ -260,11 +239,12 @@ class Virtual(QubeInterface):
         ----------
         voltage : Desired motor voltage [V]. Saturated to ±10 V.
         """
+        # update parrent class state
+        super().write(voltage)
+
+        # Check if model and data are initialized
         if self.model is None or self.data is None:
             raise RuntimeError("Simulator not open. Call open() first.")
-        
-        # Store and saturate voltage to amplifier limit
-        self.voltage_demand = max(config.CONTROL_VOLTAGE_MIN, min(config.CONTROL_VOLTAGE_MAX, voltage))
         
         # Apply control: convert voltage to torque
         if self.enabled:
