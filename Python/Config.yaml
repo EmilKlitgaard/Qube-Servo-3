@@ -1,7 +1,7 @@
 DEBUG: true
 
 GUI:
-  ENABLED: false                 # Whether to enable the GUI (Only applies if VISUALIZE is false)
+  ENABLED: false                # Whether to enable the GUI (Only applies if VISUALIZE is false)
   UPDATE_RATE: 100              # GUI update rate in Hz (only applies if ENABLED is true)
 
 UART:

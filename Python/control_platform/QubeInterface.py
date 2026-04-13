@@ -1,4 +1,8 @@
+import math
 from abc import ABC, abstractmethod
+
+from Config import config
+
 
 class QubeInterface(ABC):
     """
@@ -17,47 +21,69 @@ class QubeInterface(ABC):
             voltage = my_controller(theta, theta_dot, alpha, alpha_dot)
             qube.write(voltage)
     """
+    def __init__(self, motor_constant) -> None:
+        """Initialize parrent class."""
+        # Control state
+        self.enabled = False
+        self.voltage_demand = 0.0
+        self.motor_constant = motor_constant
+
+        # Target state
+        self.target_theta = 0.0
+        self.target_alpha = 0.0
+
+        if config.DEBUG: print(f"[QubeInterface] Parrent class initialized...")
+        
 
     # ── context manager support ────────────────────────────────────────────────
     def __enter__(self):
         self.open()
         return self
 
+
     def __exit__(self, *_):
         self.close()
+
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
     @abstractmethod
     def open(self) -> None:
         """Open / initialise the hardware or simulator."""
 
+
     @abstractmethod
     def close(self) -> None:
         """Shut down cleanly — zero voltage, release all resources."""
+
 
     # ── initialisation helpers ─────────────────────────────────────────────────
     @abstractmethod
     def reset(self) -> None:
         """Zero encoder counts (Physical) or simulation state (Virtual)."""
+        # Reset internal state
+        self.voltage_demand = 0.0
 
-    @abstractmethod
+
     def set_target(self, theta: float, alpha: float) -> None:
         """Set the target state for the controller (not used in this implementation)."""
+        self.target_theta = theta
+        self.target_alpha = alpha
+        if config.DEBUG: print(f"[Virtual] New target: theta={math.degrees(theta):.1f}°, alpha={math.degrees(alpha):.1f}°")
+
+
+    def enable(self, on: bool) -> None:
+        """Enable (True) or disable (False) the motor amplifier."""
+        if on:
+            self.enabled = True
+        else:
+            self.enabled = False
+            self.voltage_demand = 0.0
+
 
     @abstractmethod
     def set_led(self, r: float, g: float, b: float) -> None:
-        """
-        Set the RGB LED.
+        """Set the RGB LED."""
 
-        Parameters
-        ----------
-        r, g, b : float
-            Each channel in the range 0.0 – 1.0.
-        """
-
-    @abstractmethod
-    def enable(self, on: bool) -> None:
-        """Enable (True) or disable (False) the motor amplifier."""
 
     # ── control loop ──────────────────────────────────────────────────────────
     @abstractmethod
@@ -73,6 +99,7 @@ class QubeInterface(ABC):
         alpha_dot : float   Pendulum angular velocity      [rad/s]
         """
 
+
     @abstractmethod
     def write(self, voltage: float) -> None:
         """
@@ -80,3 +107,6 @@ class QubeInterface(ABC):
 
         The implementation saturates the value to ±18 V (amplifier limit).
         """
+
+        # Store and saturate voltage to amplifier limit
+        self.voltage_demand = max(config.CONTROL_VOLTAGE_MIN, min(config.CONTROL_VOLTAGE_MAX, voltage))

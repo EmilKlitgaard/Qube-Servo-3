@@ -1,81 +1,103 @@
 # Project Structure
 
 ## Overview
-Inverted pendulum stabilization system for Quanser QUBE-Servo 3. The system comprises:
-- **Main thread**: GUI event loop (displays live plot and controls)
-- **UART thread**: Listens for state updates from microcontroller
-- **Control thread**: Executes swing-up sequence, then stabilization control
+Inverted pendulum stabilization system for Quanser QUBE-Servo 3.
+
+**Thread Architecture:**
+- **Main thread**: GUI dashboard/visualization (event loop)
+- **UART thread**: Receives state updates from TM4C123 microcontroller  
+- **Control thread**: Swing-up control, then LQR stabilization
 
 ---
 
-## [`Python/`](../Python/) — Main codebase
+## [`Python/`](../Python/) — Host-side control software
 
 | File | Purpose |
 |---|---|
-| [`main.py`](../Python/main.py) | Entry point. Spawns UART and controller threads, then launches GUI on main thread. |
-| [`Config.py`](../Python/Config.py) | Singleton config. Reads `Config.yaml` and exposes settings globally (`from Config import config`). |
-| [`Config.yaml`](../Python/Config.yaml) | Project settings: debug mode, UART port/baud, simulation flag, plotting flag. |
-| [`requirements.txt`](../Python/requirements.txt) | Dependencies: `pyserial`, `numpy`, `pyyaml`, `matplotlib`. |
+| [`main.py`](../Python/main.py) | Entry point. Initializes UART & control threads, then runs dashboard GUI on main thread. |
+| [`Config.py`](../Python/Config.py) | Global configuration singleton (reads `Config.yaml`). |
+| [`Config.yaml`](../Python/Config.yaml) | Settings: debug mode, UART port/baud, simulation vs. physical, visualization. |
+| [`requirements.txt`](../Python/requirements.txt) | Dependencies: `pyserial`, `numpy`, `pyyaml`, `matplotlib`, `customtkinter`. |
 
 ---
 
-## [`Python/control_platform/`](../Python/control_platform/) — Hardware abstraction
-
-Supports both physical Qube and virtual (simulated) environments via a common interface.
+## [`Python/control_platform/`](../Python/control_platform/) — Hardware abstraction layer
 
 | File | Purpose |
 |---|---|
-| [`QubeInterface.py`](../Python/control_platform/QubeInterface.py) | Abstract base class defining the interface: `read()`, `write()`, `set_led()`, `reset()`, `enable()`. |
-| [`Physical.py`](../Python/control_platform/Physical.py) | Implementation using Quanser HIL API for actual hardware. |
-| [`Virtual.py`](../Python/control_platform/Virtual.py) | Simulated pendulum model (ODEs, no external hardware). |
+| [`QubeInterface.py`](../Python/control_platform/QubeInterface.py) | Abstract interface: `read()`, `write()`, `set_led()`, `reset()`, `enable()`. |
+| [`Physical.py`](../Python/control_platform/Physical.py) | Real hardware implementation (Quanser HIL API). |
+| [`Virtual.py`](../Python/control_platform/Virtual.py) | Simulated pendulum (ODE model, no hardware required). |
 
 ---
 
-## [`Python/controller/`](../Python/controller/) — Control logic
-
-Mode-switching between swing-up and stabilization phases.
+## [`Python/controller/`](../Python/controller/) — Control algorithms
 
 | File | Purpose |
 |---|---|
-| [`ControlLoop.py`](../Python/controller/ControlLoop.py) | Main loop (`run_controller()`). Reads state, computes voltage demand, updates LED, logs/plots data. |
-| [`Controller.py`](../Python/controller/Controller.py) | Combined swing-up + stabilization controller. Manages mode-switching and LQR feedback gains. |
-| [`SwingUp.py`](../Python/controller/SwingUp.py) | State machine: moves arm to swing pendulum from down to near-upright (6 discrete steps). |
+| [`ControlLoop.py`](../Python/controller/ControlLoop.py) | Main control loop. Reads state, computes voltage, logs/plots data. |
+| [`Controller.py`](../Python/controller/Controller.py) | Mode-switching logic: swing-up phase → stabilization (LQR). |
+| [`SwingUp.py`](../Python/controller/SwingUp.py) | Swing-up state machine (6-step sequence). |
 
 ---
 
-## [`Python/data/`](../Python/data/) — Logging & visualization
+## [`Python/data/`](../Python/data/) — Data logging & visualization
 
 | File | Purpose |
 |---|---|
-| [`Logging.py`](../Python/data/Logging.py) | `Logger` class. Records time, theta, theta_dot, alpha, alpha_dot, voltage at each timestep. |
-| [`Plot.py`](../Python/data/Plot.py) | `Plotter` class. Live animated 2D plot (matplotlib) showing state trajectories over time. |
+| [`Logging.py`](../Python/data/Logging.py) | `Logger` class. Stores time, theta, theta_dot, alpha, alpha_dot, voltage history. |
+| [`Plot.py`](../Python/data/Plot.py) | `Plotter` class. Live animated matplotlib plot (embedded or standalone). |
 
 ---
 
-## [`Python/interface/`](../Python/interface/) — User interface
+## [`Python/interface/`](../Python/interface/) — Dashboard & visualization UI
 
 | File | Purpose |
 |---|---|
-| [`GUI.py`](../Python/interface/GUI.py) | GUI window (main thread). Displays live plot section, start/stop control, enable/disable, reset button, mode indicator (swingup/stabilize). Closes gracefully via `stop_event`. |
+| [`AppInterface.py`](../Python/interface/AppInterface.py) | Abstract base class for dashboard modes (customtkinter-based). |
+| [`Dashboard.py`](../Python/interface/Dashboard.py) | Live control dashboard (SIMULATION=False). Control buttons, status, live plot. |
+| [`StaticGraph.py`](../Python/interface/StaticGraph.py) | Historical plot viewer (SIMULATION=True). Post-run data visualization. |
 
 ---
 
-## [`Python/tiva_microcontroller/`](../Python/tiva_microcontroller/) — Microcontroller interface
+## [`Python/tiva_microcontroller/`](../Python/tiva_microcontroller/) — Microcontroller communication
 
 | File | Purpose |
 |---|---|
-| [`UART.py`](../Python/tiva_microcontroller/UART.py) | `UART` class (pyserial wrapper). Provides `read_line()`, `loop()`, `list_ports()`. Thread-safe, handles connection errors. |
+| [`UART.py`](../Python/tiva_microcontroller/UART.py) | UART serial interface (pyserial wrapper). Thread-safe, handles connection management. |
 
 ---
 
-## [`Virtual_model/`](../Virtual_model/) — Robot description
+## [`Tiva Microcontroller/`](../Tiva%20Microcontroller/) — Embedded firmware (TM4C123 ARM Cortex-M4)
+
+Low-level firmware for the TM4C123GH6PM microcontroller (CCS project).
 
 | File | Purpose |
 |---|---|
-| [`Qube_Servo_3.urdf`](../Virtual_model/Qube_Servo_3.urdf) | URDF model of the Qube Servo 3 (for visualization/simulation environments). |
-| [`Qube_Servo_3.xml`](../Virtual_model/Qube_Servo_3.xml) | Simulation configuration (physics, dynamics). |
+| [`main.c`](../Tiva%20Microcontroller/main.c), [`*.h`] | Core controller loop. Reads sensors, executes motor control, transmits state via UART. |
+| [`uart0.c/h`](../Tiva%20Microcontroller/uart0.c) | UART0 serial communication driver. |
+| [`GPIO.c/h`](../Tiva%20Microcontroller/GPIO.c) | GPIO control (LEDs, general I/O). |
+| [`Timer.c/h`](../Tiva%20Microcontroller/Timer.c) | Timer interrupts for control loop timing. |
+| [`Potentiometer.c/h`](../Tiva%20Microcontroller/Potentiometer.c) | ADC sampling (arm & pendulum angles). |
+| [`Button.c/h`](../Tiva%20Microcontroller/Button.c) | Button input handling. |
+| [`Numpad.c/h`](../Tiva%20Microcontroller/Numpad.c) | Numeric keypad interface. |
+| [`Queue.c/h`](../Tiva%20Microcontroller/Queue.c) | Event queue for concurrent operation. |
+| [`Events.c/h`](../Tiva%20Microcontroller/Events.c) | Event dispatcher & handlers. |
+| [`Sleep.c/h`](../Tiva%20Microcontroller/Sleep.c) | Sleep mode management. |
+| [`Print.c/h`](../Tiva%20Microcontroller/Print.c) | Debug printing utility. |
+| [`tm4c123gh6pm.h`] | Microcontroller hardware definitions. |
+| [`tm4c123gh6pm_startup_ccs.c`], [`tm4c123gh6pm.cmd`] | Linker script & startup code. |
+
+---
+
+## [`Virtual_model/`](../Virtual_model/) — Robot URDF & physics
+
+| File | Purpose |
+|---|---|
+| [`Qube_Servo_3.urdf`](../Virtual_model/Qube_Servo_3.urdf) | URDF robot model description. |
+| [`Qube_Servo_3.xml`](../Virtual_model/Qube_Servo_3.xml) | MuJoCo physics configuration. |
 
 ---
 
 ## [`Images/`](../Images/)
-Project images used in the README.
+Project documentation images.

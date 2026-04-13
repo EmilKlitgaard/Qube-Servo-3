@@ -31,32 +31,43 @@ class UART:
                 print(f"[UART] Error opening port '{port}': {e}")
             raise 
 
-        self.last_data = None
+        self.state = "Idle"     # States: Idle/Running
+        self.mode = "Numpad"    # Modes: Numpad/Potentiometer
+
+        self.last_data = None   # Store last received data
+
         if config.DEBUG: print("[UART] UART class initialized\n")
     
 
     def loop(self, qube, stop_event: threading.Event) -> None:
         """Continuously read and process incoming UART data. Press Ctrl+C to stop."""
-        print(f"[UART] Listening on {self.serial.port} at {self.serial.baudrate} baud.")
+        if config.DEBUG: print(f"[UART] Listening on {self.serial.port} at {self.serial.baudrate} baud.")
         try:
             while not stop_event.is_set():
                 line = self.read_line()
                 if line:
-                    # Check if it's a valid control command (integer 0-12)
-                    if self.is_valid_int(line):
-                        try:
-                            cmd = int(line)
-                            target = self.format_data(cmd)
-                            print(f"[UART] Setting new theta target: {qube.target_theta:.1f}°")
-                            qube.set_target(math.radians(target), 0.0)
-                        except ValueError:
-                            print(f"[UART] Error processing command: {line}")
+                    if self.is_int(line):
+                        if self.state == "Running":
+                            try:
+                                if config.DEBUG: print(f"[UART] Received command: {line}")
+                                data = int(line)
+                                target = self.format_data(data)
+                                target_radians = math.radians(target)
+                                if target_radians != qube.target_theta:
+                                    if config.DEBUG: print(f"[UART] Setting new theta target: {target:.1f}°")
+                                    qube.set_target(target_radians, 0.0)
+                            except ValueError:
+                                print(f"[UART] Error processing command: {line}")
                     else:
-                        # It's a string message, just print it
-                        print(f"[UART] {line}")
+                        if config.DEBUG: print(f"[UART] {line}")
+                        self.check_updates(line)
+                        if self.state == "Idle":
+                            qube.set_target(0.0, 0.0)
                 time.sleep(0.1)
+
         except KeyboardInterrupt:
-            print("\n[UART] Stopped.")
+            if config.DEBUG: print("\n[UART] Stopped.")
+
         finally:
             self.serial.close()
 
@@ -68,36 +79,56 @@ class UART:
             self.last_data = raw.decode("utf-8", errors="replace").strip()
             return self.last_data
         return None
+    
+
+    def check_updates(self, line: str) -> None:
+        if "Idle" in line:
+            self.state = "Idle"
+            if config.DEBUG: print("[UART] Switched to IDLE state")
+        elif "Running" in line:
+            self.state = "Running"
+            if config.DEBUG: print("[UART] Switched to RUNNING state")
+        elif "Numpad" in line:
+            self.mode = "Numpad"
+            if config.DEBUG: print("[UART] Switched to NUMPAD mode")
+        elif "Potentiometer" in line:
+            self.mode = "Potentiometer"
+            if config.DEBUG: print("[UART] Switched to POTENTIOMETER mode")
 
 
-    def is_valid_int(self, data: str) -> bool:
-        """Check if data is a valid integer command (0-12)."""
+    def is_int(self, data: str) -> bool:
+        """Check if data is a valid integer."""
         if data is None:
             return False
         try:
-            value = int(data)
-            return 0 <= value <= 12
+            if data == "0": return True  # Special case for zero
+            return int(data)
         except ValueError:
             return False
 
 
     def format_data(self, data: int) -> float:
-        """Map control command integer to theta target value.
+        """Map control command integer to theta target value."""
+        if self.mode == "Numpad":
+            mapping = {     
+                1: -20.0,   2: 0.0,     3: 20.0,    
+                4: -40.0,   5: 0.0,     6: 40.0,    
+                7: -60.0,   8: 0.0,     9: 60.0,    
+                10: -80.0,  11: 0.0,    12: 80.0
+            }
+            
+            if data in mapping:
+                return mapping[data]
+            else:
+                return 0.0  # Default to 0 if command is out of range
+            
+        elif self.mode == "Potentiometer":
+            # Map potentiometer value (0-100) to theta target (-90 to +90 degrees)
+            mapped_data = ((data / 100.0) * 180.0) - 90.0
+            return max(-90.0, min(90.0, float(mapped_data)))  # Clamp to [-90, 90]
         
-        Mapping: 1,4,7,10 = -20, -40, -60, -80
-                 3,6,9,12 = 20, 40, 60, 80
-                 0,2,5,8,11 = 0.0
-        """
-        mapping = {     
-            1: -20.0,   2: 0.0,     3: 20.0,    
-            4: -40.0,   5: 0.0,     6: 40.0,    
-            7: -60.0,   8: 0.0,     9: 60.0,    
-            10: -80.0,  11: 0.0,    12: 80.0
-        }
-        if data in mapping:
-            return mapping[data]
         else:
-            return 0.0  # Default to 0 if command is out of range
+            return 0.0  # Default to 0 in unknown mode
         
 
     def get_data(self) -> str | None:
