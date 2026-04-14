@@ -1,4 +1,5 @@
 # NOTE: quanser must be installed separately via the Quanser Python SDK / QUARC installer
+# NOTE: sqlite3 is part of Python standard library (no pip package needed)
 pyserial
 numpy
 scipy

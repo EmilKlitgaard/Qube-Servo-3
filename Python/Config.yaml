@@ -34,3 +34,6 @@ PLANT:
 DATA:
   LOGGING: true                 # Whether to log data for plotting
   PLOTTING: true                # Whether to enable plotting after simulation (Requires LOGGING to be true)
+  DB_LOGGING: false            # Enable persistent SQLite logging to disk
+  DB_PATH: data/logs.db         # Relative to Python/ unless absolute path is provided
+  DB_COMMIT_INTERVAL: 100       # Number of samples between DB commits

@@ -5,7 +5,7 @@ import time
 import threading
 
 from Config import config
-from controller import run_controller
+from Controller import run_controller
 from tiva_microcontroller.UART import UART
 from control_platform import QubeInterface, Physical, Virtual
 
@@ -230,6 +230,10 @@ def main():
                 print("[Thread] WARNING: Control thread did not terminate in time")
             else:
                 if config.DEBUG: print("[Thread] Control thread terminated successfully.")
+
+        # Flush/close logger backend (if enabled)
+        if logger is not None and hasattr(logger, "close"):
+            logger.close()
         
         print("[Main] Shutdown complete.")
 
