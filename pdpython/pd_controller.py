@@ -10,6 +10,7 @@ import numpy as np
 
 @dataclass
 class PDController:
+	# Physical parameters
 	Rm: float = 7.5
 	kt: float = 0.0422
 	km: float = 0.0422
@@ -54,6 +55,7 @@ class PDController:
 	def clamp(value: float, lo: float, hi: float) -> float:
 		return max(min(value, hi), lo)
 
+# Estimates theta_dot and alpha_dot using finite differences. If dt is not provided, it uses the time elapsed since the last call to compute_voltage.
 	def _estimate_rates(self, theta: float, alpha: float, dt: Optional[float]) -> Tuple[float, float, float]:
 		if dt is None:
 			if self._prev_time is None:
@@ -75,6 +77,7 @@ class PDController:
 		self._prev_time = time.perf_counter()
 		return theta_dot, alpha_dot, dt_used
 
+ #for hardware control for sim use closed_loop_dynamics
 	def compute_voltage(
 		self,
 		alpha: float,
@@ -103,6 +106,7 @@ class PDController:
 	def motor_torque(self, voltage: float, theta_dot: float) -> float:
 		return (self.kt / self.Rm) * (voltage - self.km * theta_dot)
 
+# Computes the state derivatives given the current state and input voltage. The state is expected to be [theta, alpha, theta_dot, alpha_dot].
 	def dynamics(self, state: Sequence[float], voltage: float) -> np.ndarray:
 		theta, alpha, theta_dot, alpha_dot = state
 		tau = self.motor_torque(voltage, theta_dot)
@@ -127,6 +131,7 @@ class PDController:
 
 		return np.array([theta_dot, alpha_dot, qdd[0], qdd[1]], dtype=float)
 
+    #for simulation for hardware use compute_voltage
 	def closed_loop_dynamics(self, _t: float, state: Sequence[float]) -> np.ndarray:
 		theta, alpha, theta_dot, alpha_dot = state
 		voltage = self.compute_voltage(
