@@ -2,19 +2,18 @@
 * University of Southern Denmark
 * Embedded C Programming (ECP)
 *
-* MODULENAME.: Button.h
+* MODULENAME.: LedManager.h
 *
 * PROJECT....:
 *
-* DESCRIPTION: Button handling for FreeRTOS
+* DESCRIPTION: LED management task for system status and mode indication
 *
 * Change Log:
 ******************************************************************************
 * Date    Id    Change
 * YYMMDD
 * --------------------
-* 050128  KA    Module created.
-* 260415  User  Converted to FreeRTOS
+* 260415  User  Module created (merged status_led and led_controller)
 *
 *****************************************************************************/
 
@@ -24,34 +23,17 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "data_type.h"
-#include "tm4c123gh6pm.h"
-#include "global_variables.h"
-#include "Sleep.h"
 
 /*****************************    Defines    *******************************/
-// Debounce delays
-#define BUTTON_DEBOUNCE_MS  20
-#define BUTTON_SCAN_MS      50
-
-// Button GPIO pins (Port F)
-#define BUTTON_SW1          0x10    // PF4 (SW1)
-#define BUTTON_SW2          0x01    // PF0 (SW2)
 
 /*****************************   Constants   *******************************/
-extern volatile INT8U pending_button;
 
 /*****************************   Functions   *******************************/
-extern void init_button_handler(void);
-/*****************************************************************************
-*   Input    : -
-*   Output   : -
-*   Function : Initialize button handler
-******************************************************************************/
-
-
-extern void button_task(void *pvParameters);
+void led_manager_task(void *pvParameters);
 /*****************************************************************************
 *   Input    : FreeRTOS task parameter (unused)
 *   Output   : -
-*   Function : FreeRTOS task for button handling
+*   Function : FreeRTOS task managing all LED behavior:
+*              - Status indicator (PD6) blinking
+*              - Mode/state LEDs (PF1-3) color control
 ******************************************************************************/

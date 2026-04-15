@@ -21,15 +21,8 @@
 #include "Potentiometer.h"
 
 /*****************************    Defines    *******************************/
-#define ADC_MAX_VALUE           4095        // 12-bit ADC
-#define POT_ANGLE_MIN           -90
-#define POT_ANGLE_MAX           90
-
 /*****************************   Constants   *******************************/
-
 /*****************************   Variables   *******************************/
-volatile INT8U potentiometer_input;
-
 /*****************************   Functions   *******************************/
 void init_potentiometer(void) {
     // Enable the GPIO port B and ADC0 module in Run Mode
@@ -66,7 +59,7 @@ void init_potentiometer(void) {
 INT8U scan_potentiometer(void) {
     unsigned long timeout_count;
     INT16U adc_value;
-    INT16S angle;
+    INT8U percentage;
     
     // Clear any previous conversion result/flag
     ADC0_ISC_R |= 0x08;                         // Clear interrupt flag for SS3
@@ -92,15 +85,40 @@ INT8U scan_potentiometer(void) {
     // Clear interrupt flag
     ADC0_ISC_R |= 0x08;
 
-    // Map ADC value (0-4095) to angle (-90 to 90 degrees)
-    //angle = ((adc_value * 180) / ADC_MAX_VALUE) - 90;
-    angle = (adc_value * 100) / ADC_MAX_VALUE;
+    // Map ADC value (0-4095) to percentage (0 to 100)
+    percentage = (adc_value * 100) / ADC_MAX_VALUE;
+    return percentage;
+}
 
-    // Validate the result is in valid range
-    /*if (angle < POT_ANGLE_MIN || angle > POT_ANGLE_MAX) {
-        return INVALID_POTENTIOMETER_INPUT;
-    }*/
 
-    // Convert signed angle to unsigned (0-180 represents -90 to +90)
-    return angle;
+/*****************************   Potentiometer Task   *****************************/
+void potentiometer_task(void *pvParameters) {
+    INT8U input;
+    INT8U last_input = INVALID_POTENTIOMETER_INPUT;
+    INT8U system_state;
+    INT8U system_mode;
+
+    while (true) {
+        system_state = read_state(SYSTEM_STATE);
+        
+        if (system_state == SYSTEM_RUNNING) {
+            system_mode = read_state(SYSTEM_MODE);
+            
+            if (system_mode == MODE_POTENTIOMETER) {
+                input = scan_potentiometer();
+                
+                if ((input != INVALID_POTENTIOMETER_INPUT) && (input != last_input)) {
+                    last_input = input;
+                    set_state(POTENTIOMETER_STATE, input);
+                    print_var(input);
+                }
+            } else {
+                // Not in potentiometer mode, reset last input
+                last_input = INVALID_POTENTIOMETER_INPUT;
+            }
+        }
+
+        // System idle, slower polling
+        sleep_ms(POTENTIOMETER_SCAN_MS);
+    }
 }

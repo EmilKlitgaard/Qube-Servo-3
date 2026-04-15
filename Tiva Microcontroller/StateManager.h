@@ -2,19 +2,18 @@
 * University of Southern Denmark
 * Embedded C Programming (ECP)
 *
-* MODULENAME.: Button.h
+* MODULENAME.: StateManager.h
 *
 * PROJECT....:
 *
-* DESCRIPTION: Button handling for FreeRTOS
+* DESCRIPTION: State management with mutex protection for FreeRTOS
 *
 * Change Log:
 ******************************************************************************
 * Date    Id    Change
 * YYMMDD
 * --------------------
-* 050128  KA    Module created.
-* 260415  User  Converted to FreeRTOS
+* 260415  User  Module created.
 *
 *****************************************************************************/
 
@@ -23,35 +22,35 @@
 /***************************** Include files *******************************/
 #include <stdint.h>
 #include <stdbool.h>
+#include <FreeRTOS.h>
+#include <semphr.h>
 #include "data_type.h"
-#include "tm4c123gh6pm.h"
 #include "global_variables.h"
-#include "Sleep.h"
 
 /*****************************    Defines    *******************************/
-// Debounce delays
-#define BUTTON_DEBOUNCE_MS  20
-#define BUTTON_SCAN_MS      50
-
-// Button GPIO pins (Port F)
-#define BUTTON_SW1          0x10    // PF4 (SW1)
-#define BUTTON_SW2          0x01    // PF0 (SW2)
 
 /*****************************   Constants   *******************************/
-extern volatile INT8U pending_button;
 
 /*****************************   Functions   *******************************/
-extern void init_button_handler(void);
+void init_state_manager(void);
 /*****************************************************************************
 *   Input    : -
 *   Output   : -
-*   Function : Initialize button handler
+*   Function : Initialize state manager (mutexes, initial states)
 ******************************************************************************/
 
-
-extern void button_task(void *pvParameters);
+void set_state(INT8U state_id, INT8U value);
 /*****************************************************************************
-*   Input    : FreeRTOS task parameter (unused)
+*   Input    : State ID, Value to set
 *   Output   : -
-*   Function : FreeRTOS task for button handling
+*   Function : Thread-safe state setter
 ******************************************************************************/
+
+INT8U read_state(INT8U state_id);
+/*****************************************************************************
+*   Input    : State ID
+*   Output   : State value
+*   Function : Thread-safe state getter
+******************************************************************************/
+
+/****************************** End Of Module *******************************/

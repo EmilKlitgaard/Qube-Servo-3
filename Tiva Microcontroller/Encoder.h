@@ -2,7 +2,7 @@
 * Odense University College of Enginerring
 * Embedded C Programming (ECP)
 *
-* MODULENAME.: Numpad.h
+* MODULENAME.: Encoder.h
 *
 * PROJECT....:
 *
@@ -32,57 +32,53 @@
 #include "Sleep.h"
 
 /*****************************    Defines    *******************************/
-#define INVALID_NUMPAD_INPUT    0xFF    // Invalid numpad input
+#define INVALID_ENCODER_VALUE    0xFF   // Invalid encoder input
 
-// Debounce and scan timing
-#define NUMPAD_DEBOUNCE_MS  20
-#define NUMPAD_SCAN_MS      50
+// Encoder direction definitions
+#define ENCODER_STEADY           0      // No movement
+#define ENCODER_LEFT             1      // Encoder rotated left
+#define ENCODER_RIGHT            2      // Encoder rotated right
 
-// Numpad GPIO ports
-#define PA2     0x04    // KEYB D (Input, Active LOW)
-#define PA3     0x08    // KEYB E (Input, Active LOW)
-#define PA4     0x10    // KEYB F (Input, Active LOW)
-#define PE0     0x01    // KEYB G (Output, standard LOW)
-#define PE1     0x02    // KEYB H (Output, standard LOW)
-#define PE2     0x04    // KEYB J (Output, standard LOW)
-#define PE3     0x08    // KEYB K (Output, standard LOW)
+// Encoder value limits and increments
+#define ENC_INCREMENT        5      // Amount to increment/decrement encoder value per step
+#define ENC_START_VALUE      50     // Starting value for encoder (e.g., mid-point)
 
-// Numpad matrix
-#define NUMPAD_ROWS     4
-#define NUMPAD_COLS     3
+// Scan delays
+#define ENCODER_SCAN_MS      5
+#define ENCODER_SLEEP_MS     50
 
-// Masks
-#define COL_MASK        0x1C        // PA2, PA3, PA4
-#define ROW_MASK        0x0F        // PE0, PE1, PE2, PE3
-
+// PA5, PA6, PA7 for encoder pins
+#define ENC_A_PIN              0x20        // PA5 (channel A)
+#define ENC_B_PIN              0x40        // PA6 (channel B)
+#define ENC_MASK               0x60        // Mask for A and B (PA5 and PA6)
+#define ENC_P2_PIN             0x80        // PA7 (push button)
+#define ENC_MASK_ALL           0xE0        // PA5, PA6, PA7 combined
 
 /*****************************   Types   ***********************************/
 /*****************************   Constants   *******************************/
 /*****************************   Functions   *******************************/
-extern void init_numpad(void);
+extern void init_encoder(void);
 /*****************************************************************************
 *   Input    : -
 *   Output   : -
-*   Function : Initialize numpad GPIO pins.
+*   Function : Initialize encoder GPIO pins on PA5, PA6, PA7.
 ******************************************************************************/
 
 
-INT8U scan_numpad(void);
+INT8U scan_encoder(void);
 /*****************************************************************************
 *   Input    : -
-*   Output   : Numpad number
-*   Function : Returns the pressed number
+*   Output   : Encoder angle value (0-180, representing -90 to +90 degrees)
+*   Function : Returns the encoder angle value. Returns INVALID_ENCODER_INPUT (0xFF) on error.
 ******************************************************************************/
 
 
-extern void numpad_task(void *pvParameters);
+extern void encoder_task(void *pvParameters);
 /*****************************************************************************
 *   Input    : FreeRTOS task parameter (unused)
 *   Output   : -
-*   Function : FreeRTOS task for numpad scanning
+*   Function : FreeRTOS task for encoder scanning
 ******************************************************************************/
-
-
 
 
 

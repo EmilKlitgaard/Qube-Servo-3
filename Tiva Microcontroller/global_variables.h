@@ -26,26 +26,17 @@
 
 #define NUMPAD_STATE            2
 #define POTENTIOMETER_STATE     3
+#define ENCODER_STATE           4
 
-// State states
-#define BUTTON_SINGLE_PRESS     0
-#define BUTTON_DOUBBLE_PRESS    1
-#define BUTTON_LONG_PRESS       2
-
-#define SYSTEM_IDLE             3
-#define SYSTEM_RUNNING          4
-
-#define MODE_NUMPAD             5
-#define MODE_POTENTIOMETER      6
-
-// Event ID's
-#define BUTTON_TIMEOUT          0
-
-
+// State values
+#define SYSTEM_IDLE             0
+#define SYSTEM_RUNNING          1
+#define MODE_NUMPAD             2
+#define MODE_POTENTIOMETER      3
+#define MODE_ENCODER            4
 
 /***************************** Semaphores *******************************/
 #define NUMPAD_SEMAPHORE    0
-
-/***************************** QUEUEs *******************************/
-#define NUMPAD_QUEUE        0
+#define POTENTIOMETER_SEMAPHORE 1
+#define ENCODER_SEMAPHORE   2
 

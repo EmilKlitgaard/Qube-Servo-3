@@ -20,11 +20,12 @@
 #pragma once
 
 /***************************** Include files *******************************/
+#include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
 #include "global_variables.h"
 #include "data_type.h"
-#include "uart0.h"
+#include "tm4c123gh6pm.h"
 
 /*****************************    Defines    *******************************/
 

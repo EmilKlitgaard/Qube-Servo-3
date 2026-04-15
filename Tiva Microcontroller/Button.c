@@ -2,11 +2,11 @@
 * University of Southern Denmark
 * Embedded C Programming (ECP)
 *
-* MODULENAME.: Handler.c
+* MODULENAME.: Button.c
 *
 * PROJECT....:
 *
-* DESCRIPTION: See module specification file (.h-file).
+* DESCRIPTION: Button handling using FreeRTOS tasks
 *
 * Change Log:
 ******************************************************************************
@@ -14,6 +14,7 @@
 * YYMMDD
 * --------------------
 * 080219  MoH    Module created.
+* 260415  User   Converted to FreeRTOS task
 *
 *****************************************************************************/
 
@@ -21,50 +22,97 @@
 #include "Button.h"
 #include "Print.h"
 #include "GPIO.h"
+#include "StateManager.h"
+#include <FreeRTOS.h>
+#include <task.h>
 
 /*****************************   Constants   *******************************/
 volatile INT8U pending_button = 0;
 
+/*****************************   Variables   *******************************/
+static INT8U last_sw1_state = 1;  // PF4 button state (active low)
+static INT8U last_sw2_state = 1;  // PF0 button state (active low)
 
 /*****************************   Functions   *******************************/
 void init_button_handler(void) {
-    // Configure GPIOF Interrupts for Both Pins (PF4, PF0)
-    GPIO_PORTF_IS_R &= ~(0x11);     // Edge-sensitive
-    GPIO_PORTF_IEV_R &= ~(0x11);    // Trigger on press (Set to Falling edge, as buttons are active low)
-    GPIO_PORTF_ICR_R = 0x11;        // Clear any prior interrupt
-    GPIO_PORTF_IM_R |= 0x11;        // Unmask interrupts
-    NVIC_EN0_R |= 0x40000000;       // Enable interrupt 30 (GPIOF) in NVIC
-    NVIC_PRI7_R = (NVIC_PRI7_R & 0xFFFFFF1F) | 0x60; // Set GPIO Port F (Button) to priority 3 (lower)
+    // Button GPIO is already configured by init_gpio() in GPIO.c
+}
+
+// Polling-based button reading function
+static INT8U read_button_sw1(void) {
+    return GPIO_PORTF_DATA_R & BUTTON_SW1;  // Read PF4 (SW1)
+}
+
+static INT8U read_button_sw2(void) {
+    return GPIO_PORTF_DATA_R & BUTTON_SW2;  // Read PF0 (SW2)
 }
 
 
-// !!! Remember to enabled handler in "tm4c123gh6pm_startup_ccs.c" !!!
-void button_handler(void) {
-    // Check for PF4 (SW1) press:
-    if (GPIO_PORTF_MIS_R & 0x10) {
-        INT8U state = read_state(SYSTEM_STATE);
-        if (state == SYSTEM_IDLE) {
-            print_str("System Running...");
-            set_state(SYSTEM_STATE, SYSTEM_RUNNING);
-            //set_led(GREEN);
-        } else {
-            print_str("System Idle...");
-            set_state(SYSTEM_STATE, SYSTEM_IDLE);
-            set_led(RED);
-        }
-        GPIO_PORTF_ICR_R = 0x10;        // Clear interrupt
-    }
+/**
+ * Button task - Polls buttons periodically for state changes
+ * 
+ * Button behavior:
+ * - PF4 (SW1): Toggle SYSTEM_STATE (IDLE <-> RUNNING)
+ * - PF0 (SW2): Toggle SYSTEM_MODE (NUMPAD <-> POTENTIOMETER)
+ * 
+ * Polling approach used instead of interrupts for simplicity
+ * with FreeRTOS task scheduling
+ */
+void button_task(void *pvParameters) {
+    INT8U current_sw1, current_sw2;
+    INT8U state;
+    INT8U mode;
+    
+    // Initialize button states (active low = 1, pressed = 0)
+    last_sw1_state = read_button_sw1();
+    last_sw2_state = read_button_sw2();
+    
+    while (true) {
+        // Read current button states
+        current_sw1 = read_button_sw1();
+        current_sw2 = read_button_sw2();
 
-    // Check for PF0 (SW2) press:
-    if (GPIO_PORTF_MIS_R & 0x01) {
-        INT8U mode = read_state(SYSTEM_MODE);
-        if (mode == MODE_NUMPAD) {
-            set_state(SYSTEM_MODE, MODE_POTENTIOMETER);
-            print_str("\n[MODE]: Potentiometer mode");
-        } else {
-            set_state(SYSTEM_MODE, MODE_NUMPAD);
-            print_str("\n[MODE]: Numpad mode");
+        // Check PF4 (SW1) - IDLE/RUNNING toggle
+        if (current_sw1 != last_sw1_state) {
+            if (current_sw1 == 0) {  // Button pressed (low)
+                state = read_state(SYSTEM_STATE);
+                if (state == SYSTEM_IDLE) {
+                    print_str("System Running...");
+                    set_state(SYSTEM_STATE, SYSTEM_RUNNING);
+                } else {
+                    print_str("System Idle...");
+                    set_state(SYSTEM_STATE, SYSTEM_IDLE);
+                    set_led(RED);
+                }
+                // Debounce delay
+                sleep_ms(BUTTON_DEBOUNCE_MS);
+            }
+            last_sw1_state = current_sw1;
         }
-        GPIO_PORTF_ICR_R = 0x01;        // Clear interrupt
+
+        // Check PF0 (SW2) - MODE toggle
+        if (current_sw2 != last_sw2_state) {
+            if (current_sw2 == 0) {  // Button pressed (low)
+                mode = read_state(SYSTEM_MODE);
+                if (mode == MODE_ENCODER) {
+                    set_state(SYSTEM_MODE, MODE_POTENTIOMETER);
+                    print_str("\n[MODE]: Potentiometer mode");
+                } 
+                if (mode == MODE_POTENTIOMETER) {
+                    set_state(SYSTEM_MODE, MODE_NUMPAD);
+                    print_str("\n[MODE]: Numpad mode");
+                }
+                if (mode == MODE_NUMPAD) {
+                    set_state(SYSTEM_MODE, MODE_ENCODER);
+                    print_str("\n[MODE]: Encoder mode");
+                }
+                // Debounce delay
+                sleep_ms(BUTTON_DEBOUNCE_MS);
+            }
+            last_sw2_state = current_sw2;
+        }
+
+        // Scan buttons periodically
+        sleep_ms(BUTTON_SCAN_MS);
     }
 }
