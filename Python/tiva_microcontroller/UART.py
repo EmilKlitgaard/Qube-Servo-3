@@ -32,7 +32,7 @@ class UART:
             raise 
 
         self.state = "Idle"     # States: Idle/Running
-        self.mode = "Numpad"    # Modes: Numpad/Potentiometer
+        self.mode = "Numpad"    # Modes: Numpad/Encoder/Potentiometer
 
         self.last_data = None   # Store last received data
 
@@ -91,6 +91,9 @@ class UART:
         elif "Numpad" in line:
             self.mode = "Numpad"
             if config.DEBUG: print("[UART] Switched to NUMPAD mode")
+        elif "Encoder" in line:
+            self.mode = "Encoder"
+            if config.DEBUG: print("[UART] Switched to ENCODER mode")
         elif "Potentiometer" in line:
             self.mode = "Potentiometer"
             if config.DEBUG: print("[UART] Switched to POTENTIOMETER mode")
@@ -121,12 +124,12 @@ class UART:
                 return mapping[data]
             else:
                 return 0.0  # Default to 0 if command is out of range
-            
-        elif self.mode == "Potentiometer":
-            # Map potentiometer value (0-100) to theta target (-90 to +90 degrees)
+        
+        elif self.mode == "Encoder" or self.mode == "Potentiometer":
+            # Map value (0-100) to theta target (-90 to +90 degrees)
             mapped_data = ((data / 100.0) * 180.0) - 90.0
             return max(-90.0, min(90.0, float(mapped_data)))  # Clamp to [-90, 90]
-        
+
         else:
             return 0.0  # Default to 0 in unknown mode
         
