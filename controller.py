@@ -57,11 +57,11 @@ class controller:
             direction = 0.0
             s = alpha_dot * math.cos(alpha)
             if s > 0.0:
-                direction = 1.0
-            elif s < 0.0:
                 direction = -1.0
+            elif s < 0.0:
+                direction = 1.0
 
-            V = -self.Ke * (E - Er) * direction
+            V = self.Ke * (E - Er) * direction
 
         else:
             if theta <= 0.0:
