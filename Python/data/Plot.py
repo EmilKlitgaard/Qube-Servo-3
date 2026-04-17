@@ -144,7 +144,7 @@ class Plotter:
         ax.set_ylabel('Angular Velocity [rad/s]', fontsize=11, fontweight='bold', color='c')
         ax.tick_params(axis='y', labelcolor='c')
         ax.axhline(y=0, color='k', linestyle='--', alpha=0.3, linewidth=0.8)
-        ax.set_title('Pendulum Velocity (α̇)', fontsize=12, fontweight='bold', color='white')
+        ax.set_title('Pendulum Velocity (α̇)', fontsize=12, fontweight='bold', color='c')
         ax.grid(True, alpha=0.3)
         ax.legend(loc='upper left', fontsize=9)
         

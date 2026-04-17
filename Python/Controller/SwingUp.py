@@ -239,9 +239,6 @@ class SwingUp:
             if self.is_upright(alpha):
                 voltage = 0.0
 
-        # Saturate voltage to amplifier limits
-        voltage = max(config.CONTROL_VOLTAGE_MIN, min(config.CONTROL_VOLTAGE_MAX, voltage))
-
         # Print info for debugging in degrees
         if config.DEBUG: print(f"[SwingUp] Phase: {self.phase}, theta: {math.degrees(theta):.1f}°, alpha: {math.degrees(alpha):.1f}°, alpha_dot: {math.degrees(alpha_dot):.1f}°/s")
         

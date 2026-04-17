@@ -117,13 +117,8 @@ def run_controller(qube: QubeInterface, logger: Logger, stop_event: threading.Ev
             print(f"[Control] On macOS, ensure you run via 'mjpython' launcher.\n")
             viewer = None
 
-    # Await for enter to start control loop
-    input("\nPress ENTER to start control loop...")
-
-    # Initialize hardware
-    qube.reset()
-    qube.set_led(1.0, 1.0, 0.0)  # Yellow: initializing
-    qube.enable(True)
+    # Await for start signal to begin control loop
+    qube.await_start()
     
     # Control loop
     try:

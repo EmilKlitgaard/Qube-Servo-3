@@ -1,4 +1,5 @@
 import math
+import time
 from abc import ABC, abstractmethod
 
 from Config import config
@@ -32,6 +33,9 @@ class QubeInterface(ABC):
         self.target_theta = 0.0
         self.target_alpha = 0.0
 
+        # Flag for starting control loop (used in GUI mode to wait for user input)
+        self.loop_running = False
+
         if config.DEBUG: print(f"[QubeInterface] Parrent class initialized...")
         
 
@@ -62,6 +66,20 @@ class QubeInterface(ABC):
         """Zero encoder counts (Physical) or simulation state (Virtual)."""
         # Reset internal state
         self.voltage_demand = 0.0
+
+    
+    def await_start(self) -> None:
+        """Wait for user input to start control loop."""
+        if config.GUI_ENABLED and not config.QUBE_VISUALIZE:
+            while not self.loop_running:
+                if config.DEBUG: print("[QubeInterface] Waiting for GUI start command...")
+                time.sleep(0.1)
+        else:
+            input("\nPress ENTER to start control loop...")
+
+        # Initialize hardware
+        self.reset()
+        self.enable(True)
 
 
     def set_target(self, theta: float, alpha: float) -> None:

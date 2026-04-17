@@ -73,14 +73,11 @@ class Controller:
         
         # Compute control: Voltage = -K * state
         voltage = sum(k_i * state_i for k_i, state_i in zip(self.k, state))
-        
-        # Saturate to motor limits
-        voltage = max(-10.0, min(10.0, voltage))
 
         return voltage
     
 
-    def compute_traditional_stabilize(self, theta: float, theta_dot: float, alpha: float, alpha_dot: float, theta_target: float = 0.0, alpha_target: float = 0.0) -> float:
+    def compute_classic_stabilize(self, theta: float, theta_dot: float, alpha: float, alpha_dot: float, theta_target: float = 0.0, alpha_target: float = 0.0) -> float:
         """
         Traditional PD stabilization controller.
         Similar to compute_modern_stabilize.
@@ -98,14 +95,15 @@ class Controller:
 
         # Wrap alpha to [-π, π] for correct angle error around upright (0)
         alpha_wrapped = math.atan2(math.sin(alpha), math.cos(alpha))
+
+        # Compute errors
+        alpha_error = alpha_wrapped - alpha_target
+        theta_error = theta - theta_target
     
         # PD control: u = -Kp * alpha_error - Kd * alpha_dot
         Kp = 50.0  # Proportional gain for angle error
         Kd = 10.0   # Derivative gain for angular velocity
-        error = (-Kp * alpha_wrapped) - (Kd * alpha_dot)
-        
-        voltage = error
-        voltage *= -1.0  # Invert control direction if needed
+        voltage = (Kp * alpha_error) + (Kd * alpha_dot) + (3.0 * theta_error) + (3.0 * theta_dot)  # Add arm stabilization terms
 
         return voltage
 
@@ -140,12 +138,15 @@ class Controller:
             if config.CONTROL_MODERN_STABILIZATION:
                 voltage = self.compute_modern_stabilize(theta, theta_dot, alpha, alpha_dot, theta_target, alpha_target)
             else:
-                voltage = self.compute_traditional_stabilize(theta, theta_dot, alpha, alpha_dot, theta_target, alpha_target)
+                voltage = self.compute_classic_stabilize(theta, theta_dot, alpha, alpha_dot, theta_target, alpha_target)
             
             # Check if pendulum has fallen down during stabilization
             if not self.swingup.is_upright(alpha):
                 if config.DEBUG: print("[Controller] Pendulum fell down. Switching back to swing-up mode.")
                 self.swingup.phase = self.swingup.PHASE_INIT # Reset swing-up phase
                 self.mode = "swingup"
+
+        # Saturate voltage to motor limits
+        voltage = max(config.CONTROL_VOLTAGE_MIN, min(config.CONTROL_VOLTAGE_MAX, voltage))
 
         return voltage, self.mode

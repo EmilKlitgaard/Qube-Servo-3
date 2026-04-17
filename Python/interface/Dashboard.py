@@ -25,7 +25,6 @@ class Dashboard(AppInterface):
     def __init__(self, qube: QubeInterface, logger: Logger, stop_event: threading.Event):
         """Initialize Dashboard."""
         super().__init__(qube, logger, stop_event)
-        self.control_running = False
         self.motor_enabled = False
 
         self.init_dashboard()  # Create the CTk window and panels
@@ -79,15 +78,15 @@ class Dashboard(AppInterface):
         control_frame.grid(row=1, column=0, padx=10, pady=10, sticky="ew")
         control_frame.grid_columnconfigure(0, weight=1)
         
-        # Start/Stop button
+        # Start
         self.btn_start_stop = ctk.CTkButton(
             control_frame,
             text="▶ START CONTROL",
             font=ctk.CTkFont(size=14, weight="bold"),
             fg_color="#28a745",
             hover_color="#20c997",
-            height=50,
-            command=self.toggle_control
+            height=40,
+            command=self.start_control
         )
         self.btn_start_stop.grid(row=0, column=0, padx=10, pady=5, sticky="ew")
         
@@ -184,43 +183,41 @@ DT: {config.CONTROL_DT*1000:.1f}ms"""
         config_label.pack(padx=10, pady=10)
     
     
-    def toggle_control(self) -> None:
-        """Toggle control loop start/stop."""
-        self.control_running = not self.control_running
-        if config.DEBUG: print(f"[GUI] Control toggled: {'ON' if self.control_running else 'OFF'}")
+    def start_control(self) -> None:
+        """Start control loop."""
+        self.qube.loop_running = True
+        if config.DEBUG: print(f"[GUI] Start loop flag set to: {self.qube.loop_running}")
+        self.btn_start_stop.grid_remove()   # Remove button after starting
+        time.sleep(0.1)  # Small delay to ensure flag is set before control loop checks it
         self.update_status_display()
     
     
     def toggle_motor(self) -> None:
         """Toggle motor enable/disable."""
-        self.motor_enabled = not self.motor_enabled
-        self.qube.enable(self.motor_enabled)  # Update motor state in control platform
-        if config.DEBUG: print(f"[GUI] Motor toggled: {'ENABLED' if self.motor_enabled else 'DISABLED'}")
+        self.qube.enabled = not self.qube.enabled
+        if config.DEBUG: print(f"[GUI] Motor toggled: {'ENABLED' if self.qube.enabled else 'DISABLED'}")
         self.update_status_display()
     
     
     def reset_system(self) -> None:
         """Reset system state."""
         self.qube.reset()  # Reset the control platform (simulation only)
-        self.control_running = False
-        self.motor_enabled = False
+        self.qube.enabled = False
         self.update_status_display()
-        self.plotter.reset() # Reset the graph plotter
+        self.logger.clear()  # Clear all logged data
         if config.DEBUG: print("[GUI] System reset triggered")
     
     
     def update_status_display(self) -> None:
         """Update all status indicators."""
         # Update control status
-        if self.control_running:
+        if self.qube.loop_running:
             self.status_control.configure(text="● RUNNING", text_color="#28a745")
-            self.btn_start_stop.configure(text="⏹ STOP CONTROL", fg_color="#dc3545", hover_color="#c82333")
         else:
             self.status_control.configure(text="● STOPPED", text_color="#888888")
-            self.btn_start_stop.configure(text="▶ START CONTROL", fg_color="#28a745", hover_color="#20c997")
         
         # Update motor status
-        if self.motor_enabled:
+        if self.qube.enabled:
             self.status_motor.configure(text="● ENABLED", text_color="#28a745")
             self.btn_motor.configure(text="⏸ DISABLE MOTOR", fg_color="#6f42c1", hover_color="#4d2d9e")
         else:
@@ -259,8 +256,7 @@ DT: {config.CONTROL_DT*1000:.1f}ms"""
         """Handle window close event."""
         if config.DEBUG: print("[GUI] Dashboard close requested")
         self.stop_event.set()  # Signal all threads to stop
-        self.control_running = False
-        self.motor_enabled = False
+        self.qube.enable(False)  # Ensure motor is disabled
         self.update_status_display()
         self.destroy()
         if config.DEBUG: print("[GUI] Dashboard closed and stop event set")
