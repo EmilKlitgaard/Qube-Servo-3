@@ -45,10 +45,9 @@ class Graph(AppInterface):
         # Wait for simulation to finish
         while not self.stop_event.is_set():
             try:
-                time.sleep(self.sleep_time)
+                time.sleep(0.1)
             except Exception as e:
-                if config.DEBUG:
-                    print(f"[GUI] Error waiting for simulation: {e}")
+                if config.DEBUG: print(f"[GUI] Error waiting for simulation: {e}")
         
         # Simulation complete - get elapsed time and set timeline
         self.timeline_max = self.logger.time_history[-1]
