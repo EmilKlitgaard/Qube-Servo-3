@@ -10,7 +10,7 @@ UART:
 
 QUBE:
   SIMULATION: true              # Whether to use MuJoCo simulation (true) or real hardware (false)
-  VISUALIZE: false              # Whether to launch MuJoCo viewer (only applies if SIMULATION is true)
+  VISUALIZE: true               # Whether to launch MuJoCo viewer (only applies if SIMULATION is true)
   SIMULATION_SPEED: 1.0         # 1.0 = real time, 0.5 = half speed
 
 CONTROL:

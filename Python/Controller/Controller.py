@@ -101,7 +101,7 @@ class Controller:
         theta_error = theta - theta_target
     
         # PD control: u = -Kp * alpha_error - Kd * alpha_dot
-        Kp = 50.0  # Proportional gain for angle error
+        Kp = 60.0  # Proportional gain for angle error
         Kd = 10.0   # Derivative gain for angular velocity
         voltage = (Kp * alpha_error) + (Kd * alpha_dot) + (3.0 * theta_error) + (3.0 * theta_dot)  # Add arm stabilization terms
 
