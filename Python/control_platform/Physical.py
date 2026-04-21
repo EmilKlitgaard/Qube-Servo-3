@@ -90,9 +90,6 @@ class Physical(QubeInterface):
 
     # ── initialisation helpers ─────────────────────────────────────────────────
     def reset(self) -> None:
-        # Reset parrent class
-        super().reset()
-
         self.enable(False)  # Disable motor
     
 
@@ -104,14 +101,14 @@ class Physical(QubeInterface):
 
 
     def enable(self, on: bool) -> None:
-        # Update parrent class state
-        super().enable(on) 
-
-        if self.enabled:
+        if on:
             # Enable motor
+            self.enabled = True
             self.card.write_digital(self.digital_channel, 1, np.array([1], dtype=np.int8))
         else:
             # Disable motor
+            self.enabled = False
+            self.voltage_demand = 0.0
             self.card.write_digital(self.digital_channel, 1, np.array([0], dtype=np.int8))
 
 

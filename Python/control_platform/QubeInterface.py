@@ -75,8 +75,6 @@ class QubeInterface(ABC):
     @abstractmethod
     def reset(self) -> None:
         """Zero encoder counts (Physical) or simulation state (Virtual)."""
-        # Reset internal state
-        self.voltage_demand = 0.0
 
     
     def await_start(self) -> None:
@@ -100,13 +98,9 @@ class QubeInterface(ABC):
         if config.DEBUG: print(f"[Virtual] New target: theta={math.degrees(theta):.1f}°, alpha={math.degrees(alpha):.1f}°")
 
 
+    @abstractmethod
     def enable(self, on: bool) -> None:
         """Enable (True) or disable (False) the motor amplifier."""
-        if on:
-            self.enabled = True
-        else:
-            self.enabled = False
-            self.voltage_demand = 0.0
 
 
     @abstractmethod

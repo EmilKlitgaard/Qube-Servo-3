@@ -139,11 +139,11 @@ class Virtual(QubeInterface):
         - Pendulum at upright position (alpha = 0)
         - All velocities zeroed
         """
-        # Reset parrent class
-        super().reset()
-
         if self.model is None or self.data is None:
             raise RuntimeError("Simulator not open. Call open() first.")
+        
+        # Ensure motor is disabled during reset
+        self.enable(False)
 
         # Set initial generalized coordinates (qpos) using named access
         self.data.joint('theta').qpos = self.startup_theta       # theta = 0 (center)
@@ -156,6 +156,14 @@ class Virtual(QubeInterface):
         self.target_time = time.time()
 
         print("[Virtual] Simulation reset.")
+
+
+    def enable(self, on) -> None:    
+        if on:
+            self.enabled = True
+        else:
+            self.enabled = False
+            self.voltage_demand = 0.0
 
 
     def set_led(self, r: float, g: float, b: float) -> None:
