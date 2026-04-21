@@ -68,7 +68,7 @@ class Physical(QubeInterface):
             raise RuntimeError(f"[Physical] Failed to initialize HIL card: {e}")
 
         # Zero encoders
-        self.card.set_encoder_counts(self.encoder_channels, 2, np.array([0, 0], dtype=np.int32))
+        #self.card.set_encoder_counts(self.encoder_channels, 2, np.array([0, 0], dtype=np.int32))
 
         # Initialize outputs
         self.write(0.0)
@@ -129,16 +129,16 @@ class Physical(QubeInterface):
         alpha = self.encoder_buffer[1] * self.rad_per_count
         theta_dot = self.other_buffer[0] * self.rad_per_count
         alpha_dot = self.other_buffer[1] * self.rad_per_count
-    
-        return theta, alpha, theta_dot, alpha_dot
+        
+        # Correctly handle alpha angle wrapping (e.g., 359° ≈ -1° for control purposes)
+        alpha = abs((alpha + math.radians(180)) % math.radians(360))
+
+        return theta, theta_dot, alpha, alpha_dot
 
 
     def write(self, voltage: float) -> None:
-        # update parrent class state
+        # Update parrent class state
         super().write(voltage)
 
         self.analog_buffer[0] = self.voltage_demand
         self.card.write_analog(self.analog_channel, 1, self.analog_buffer)
-
-        # Set LED to blue when motor is active
-        self.set_led(0, 0, 1) if self.enabled else self.set_led(1, 0, 0)

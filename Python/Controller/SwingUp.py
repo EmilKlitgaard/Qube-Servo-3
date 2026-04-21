@@ -46,37 +46,29 @@ class SwingUp:
         
         # Phase parameters
         self.alpha_dot_threshold = math.radians(10)         # 10 degrees/s in radians/s
-        self.top_threshold = 25
+        self.far_up_threshold = 10      # Threshold for considering pendulum upright (degrees from vertical)
+        self.up_threshold = 30    # Threshold for considering pendulum down (degrees from vertical)
         self.down_threshold = 5
+        self.target_theta = 30.0  # Target arm angle for swing-up phases (updated dynamically)
+    
+
+    def is_far_upright(self, alpha: float) -> bool:
+        """Check if pendulum is near upright (within 10 degrees)."""
+        # Check if pendulum is near upright (within 10 degrees)
+        is_far_upright_position = alpha < math.radians(self.far_up_threshold) or alpha > math.radians(360-self.far_up_threshold)
+        return is_far_upright_position
     
 
     def is_upright(self, alpha: float) -> bool:
-        """
-        Check if pendulum is in the upright region for exiting swing-up.
-        
-        Pendulum is considered upright when:
-        - |alpha| < 0.5 rad (within ~28 degrees of upright)
-        - |alpha_dot| < 2.0 rad/s (moving slowly)
-        
-        Parameters
-        ----------
-        alpha : Pendulum angle [rad]
-        alpha_dot : Pendulum angular velocity [rad/s]
-        
-        Returns
-        -------
-        bool : True if ready to exit swing-up and go to stabilization
-        """
-        # Check if pendulum is near upright (within 50 degrees)
-        is_upright_position = alpha < math.radians(self.top_threshold) or alpha > math.radians(360-self.top_threshold)
-        
+        """Check if pendulum is near upright (within 30 degrees)."""
+        is_upright_position = alpha < math.radians(self.up_threshold) or alpha > math.radians(360-self.up_threshold)
         return is_upright_position
     
 
     def is_down(self, alpha: float) -> bool:
+        """Check if pendulum is near down."""
         # Check if pendulum is near down (within 10 degrees)
         is_down_position = alpha < math.radians(180+self.down_threshold) and alpha > math.radians(180-self.down_threshold)
-        
         return is_down_position
     
 
@@ -187,57 +179,47 @@ class SwingUp:
             match self.phase:
                 # Phase 0: Rapidly move arm to -10 degrees at max speed
                 case self.PHASE_INIT:
-                    target_theta = -math.radians(10)
+                    target_theta = -math.radians(self.target_theta)
                     error = target_theta - theta
                     
-                    if abs(error) < 0.05:  # Within 0.05 rad of target
+                    if abs(error) < 0.05:  # Within 0.005 rad of target
                         self.phase = self.PHASE_WAIT_SWING
-                        voltage = 0.0
                     else:
-                        # Proportional feedback: use error sign to determine direction
-                        voltage = 10.0 * (error / abs(error)) if error != 0 else 0.0
+                        voltage = 10.0 * error
             
                 # Phase 1: Await for pendulum to reach bottom position (alpha close to π)
                 case self.PHASE_WAIT_SWING:
-                    target_theta = -math.radians(10)  # -10 degrees in radians
+                    target_theta = -math.radians(self.target_theta)
                     error = target_theta - theta
                     
                     # Wait for pendulum to reach bottom region (alpha close to π)            
-                    if self.is_down(alpha):
+                    if self.is_down(alpha) and alpha_dot < 0:
                         self.phase = self.PHASE_RAPID_MOVE
-                        voltage = 0.0
                     else:
-                        # Gently move toward target
-                        voltage = 2.0 * error
+                        # Gently move toward target (Previus 2.0)
+                        voltage = 10.0 * error
                 
                 # Phase 2: Rapidly move arm to +10 degrees at max speed
                 case self.PHASE_RAPID_MOVE:
-                    target_theta = math.radians(10)  # +10 degrees in radians
+                    target_theta = math.radians(self.target_theta)
                     error = target_theta - theta
                     
-                    if abs(error) < 0.05:  # Within 0.05 rad of target
+                    if abs(error) < 0.05:  # Within 0.005 rad of target
                         self.phase = self.PHASE_WAIT_BOTTOM
-                        voltage = 0.0
                     else:
-                        # Proportional feedback: use error sign to determine direction
-                        voltage = 10.0 * (error / abs(error)) if error != 0 else 0.0
+                        voltage = 10.0 * error
                 
                 # Phase 3: Await for pendulum to reach bottom position (alpha close to π)
                 case self.PHASE_WAIT_BOTTOM:
-                    target_theta = math.radians(10)  # +10 degrees in radians
+                    target_theta = math.radians(self.target_theta)
                     error = target_theta - theta
                     
                     # Wait for pendulum to reach bottom region (alpha close to π)            
-                    if self.is_down(alpha):
+                    if self.is_down(alpha) and alpha_dot > 0:
                         self.phase = self.PHASE_INIT
-                        voltage = 0.0
                     else:
-                        # Gently move toward target
-                        voltage = 2.0 * error
-                    
-            # Check if pendulum has reached upright region
-            if self.is_upright(alpha):
-                voltage = 0.0
+                        # Gently move toward target (Previus 2.0)
+                        voltage = 10.0 * error
 
         # Print info for debugging in degrees
         if config.DEBUG: print(f"[SwingUp] Phase: {self.phase}, theta: {math.degrees(theta):.1f}°, alpha: {math.degrees(alpha):.1f}°, alpha_dot: {math.degrees(alpha_dot):.1f}°/s")

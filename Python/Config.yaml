@@ -16,11 +16,11 @@ QUBE:
 CONTROL:
   DT: 0.001                     # Control timestep [s] (1 kHz)
   DURATION: null                # Maximum simulation duration [s], set to null for unlimited
-  MODERN_STABILIZATION: false    # Use modern stabilization method (true) or traditional method (false)
+  MODERN_STABILIZATION: true    # Use modern stabilization method (true) or traditional method (false)
   
   # Voltage limits
-  VOLTAGE_MAX: 0.0             # Maximum motor voltage [V]
-  VOLTAGE_MIN: -0.0            # Minimum motor voltage [V]
+  VOLTAGE_MAX: 3.0             # Maximum motor voltage [V]
+  VOLTAGE_MIN: -3.0            # Minimum motor voltage [V]
 
 PLANT:
   # Physical/simulation parameters (NOT CORRECT VALUES, MUST BE TUNED)
