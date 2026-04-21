@@ -71,7 +71,7 @@ class qube:
         return theta, alpha, theta_dot, alpha_dot
 
     def write(self, voltage):
-        voltage = max(min(voltage, 5.0), -5.0)
+        voltage = max(min(voltage, 10.0), -10.0)
         self.analog_buffer[0] = voltage
         self.card.write_analog(self.analog_channel, 1, self.analog_buffer)
 
