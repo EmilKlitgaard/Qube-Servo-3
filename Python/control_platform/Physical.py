@@ -60,8 +60,12 @@ class Physical(QubeInterface):
             )
         
         # Open HIL card
-        self.card = HIL("qube_servo3_usb", "0")
-        if config.DEBUG: print("[Physical] HIL card opened.")
+        try:
+            self.card = HIL("qube_servo3_usb", "0")
+            if config.DEBUG: print("[Physical] HIL card opened.")
+
+        except Exception as e:
+            raise RuntimeError(f"[Physical] Failed to initialize HIL card: {e}")
 
         # Zero encoders
         self.card.set_encoder_counts(self.encoder_channels, 2, np.array([0, 0], dtype=np.int32))
