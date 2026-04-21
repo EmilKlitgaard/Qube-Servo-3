@@ -22,16 +22,27 @@ class QubeInterface(ABC):
             voltage = my_controller(theta, theta_dot, alpha, alpha_dot)
             qube.write(voltage)
     """
-    def __init__(self, motor_constant: float = config.PLANT_MOTOR_CONSTANT) -> None:
+    def __init__(self, dt: float, motor_constant: float = config.PLANT_MOTOR_CONSTANT) -> None:
         """Initialize parrent class."""
         # Control state
         self.enabled = False
         self.voltage_demand = 0.0
         self.motor_constant = motor_constant
 
+        # Timing variables for real-time control
+        self.dt = dt
+        self.run_time = 0.0
+        self.tick_time = self.dt / config.QUBE_SIMULATION_SPEED
+        self.target_time = time.time()   # Target time for next step (enables catch-up if falling behind)
+
         # Target state
         self.target_theta = 0.0
         self.target_alpha = 0.0
+
+        # LED states
+        self.led_r = 0.0
+        self.led_g = 0.0
+        self.led_b = 0.0
 
         # Flag for starting control loop (used in GUI mode to wait for user input)
         self.loop_running = False
@@ -101,6 +112,9 @@ class QubeInterface(ABC):
     @abstractmethod
     def set_led(self, r: float, g: float, b: float) -> None:
         """Set the RGB LED."""
+        self.led_r = max(0.0, min(1.0, r))
+        self.led_g = max(0.0, min(1.0, g))
+        self.led_b = max(0.0, min(1.0, b))
 
 
     # ── control loop ──────────────────────────────────────────────────────────

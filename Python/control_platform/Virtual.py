@@ -58,15 +58,7 @@ class Virtual(QubeInterface):
     def __init__(self, dt: float = config.CONTROL_DT):
         """ Initialize the MuJoCo simulator. """
         # Initialize parrent class
-        super().__init__()  
-
-        # Simulator parameters
-        self.dt = dt
-
-        # LED states
-        self.led_r = 0.0
-        self.led_g = 0.0
-        self.led_b = 0.0
+        super().__init__(dt)
 
         # MuJoCo objects (following docs: separate model and data)
         self.model: Optional[mujoco.MjModel] = None
@@ -81,11 +73,6 @@ class Virtual(QubeInterface):
         # Set startup states for beta and alpha (arm at center, pendulum down)
         self.startup_theta = 0.0
         self.startup_alpha = 0.0
-
-        # Timing variables for real-time control
-        self.run_time = 0.0
-        self.tick_time = self.dt / config.QUBE_SIMULATION_SPEED
-        self.target_time = time.time()   # Target time for next step (enables catch-up if falling behind)
 
         if config.DEBUG: print("[Virtual] Simulator initialized")
     
@@ -173,9 +160,8 @@ class Virtual(QubeInterface):
 
     def set_led(self, r: float, g: float, b: float) -> None:
         """Set LED state and update visualization color (thread-safe with viewer lock)."""
-        self.led_r = max(0.0, min(1.0, r))
-        self.led_g = max(0.0, min(1.0, g))
-        self.led_b = max(0.0, min(1.0, b))
+        # Update internal state
+        super().set_led(r, g, b)  
 
         # Per MuJoCo docs: must acquire viewer lock before modifying model state
         if config.QUBE_VISUALIZE and self.model is not None and self.viewer is not None:

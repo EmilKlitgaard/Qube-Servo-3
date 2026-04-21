@@ -24,7 +24,7 @@ class Physical(QubeInterface):
 
     def __init__(self, dt: float = config.CONTROL_DT):
         # Initialize parrent class
-        super().__init__() 
+        super().__init__(dt)
 
         self.counts_per_rev = 2048.0
         self.rad_per_count = 2.0 * math.pi / self.counts_per_rev
@@ -97,7 +97,10 @@ class Physical(QubeInterface):
     
 
     def set_led(self, r: float, g: float, b: float) -> None:
-        self.card.write_other(self.other_write_channels, 3, np.array([r, g, b], dtype=np.float64))
+        # Update internal state
+        super().set_led(r, g, b)  
+        
+        self.card.write_other(self.other_write_channels, 3, np.array([self.led_r, self.led_g, self.led_b], dtype=np.float64))
 
 
     def enable(self, on: bool) -> None:
