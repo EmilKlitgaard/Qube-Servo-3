@@ -19,8 +19,8 @@ CONTROL:
   MODERN_STABILIZATION: false    # Use modern stabilization method (true) or traditional method (false)
   
   # Voltage limits
-  VOLTAGE_MAX: 10.0             # Maximum motor voltage [V]
-  VOLTAGE_MIN: -10.0            # Minimum motor voltage [V]
+  VOLTAGE_MAX: 0.0             # Maximum motor voltage [V]
+  VOLTAGE_MIN: -0.0            # Minimum motor voltage [V]
 
 PLANT:
   # Physical/simulation parameters (NOT CORRECT VALUES, MUST BE TUNED)

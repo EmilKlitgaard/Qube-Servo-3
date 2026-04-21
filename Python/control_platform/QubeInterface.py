@@ -146,4 +146,5 @@ class QubeInterface(ABC):
             time.sleep(self.sleep_time)
         elif config.DEBUG and self.sleep_time < -self.tick_time * 0.1:
             # Behind schedule: Report lag and skip sleep to catch up on next iteration
-            print(f"[Control] Behind: {-self.sleep_time*1000:.1f}ms (catching up...)")
+            #print(f"[Control] Behind: {-self.sleep_time*1000:.1f}ms (catching up...)")
+            pass
