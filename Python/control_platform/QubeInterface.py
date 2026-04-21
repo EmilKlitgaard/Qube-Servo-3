@@ -22,7 +22,7 @@ class QubeInterface(ABC):
             voltage = my_controller(theta, theta_dot, alpha, alpha_dot)
             qube.write(voltage)
     """
-    def __init__(self, motor_constant) -> None:
+    def __init__(self, motor_constant: float = config.PLANT_MOTOR_CONSTANT) -> None:
         """Initialize parrent class."""
         # Control state
         self.enabled = False
@@ -128,3 +128,14 @@ class QubeInterface(ABC):
 
         # Store and saturate voltage to amplifier limit
         self.voltage_demand = max(config.CONTROL_VOLTAGE_MIN, min(config.CONTROL_VOLTAGE_MAX, voltage))
+
+        # Update real-time timing with active catch-up
+        self.run_time += self.dt
+        self.target_time += self.tick_time
+        self.sleep_time = self.target_time - time.time()
+        if self.sleep_time > 0:
+            # Ahead of schedule: Sleep to maintain timing
+            time.sleep(self.sleep_time)
+        elif config.DEBUG and self.sleep_time < -self.tick_time * 0.1:
+            # Behind schedule: Report lag and skip sleep to catch up on next iteration
+            print(f"[Control] Behind: {-self.sleep_time*1000:.1f}ms (catching up...)")

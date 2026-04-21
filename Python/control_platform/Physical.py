@@ -11,40 +11,6 @@ from Config import config
 from .QubeInterface import QubeInterface
 
 
-# ── DSP helpers ───────────────────────────────────────────────────────────────
-
-def ddt_filter(u: float, state: np.ndarray, A: float, Ts: float):
-    """
-    Derivative with filtering, Tustin-discretised:  y = A·s / (s + A)
-
-    Parameters
-    ----------
-    u     : Current input sample.
-    state : np.ndarray([u_prev, y_prev], dtype=float64) — mutated in place.
-    A     : Filter bandwidth [rad/s].
-    Ts    : Sample period [s].
-    """
-    y = (2*A*u - 2*A*state[0] - state[1]*(A*Ts - 2)) / (A*Ts + 2)
-    state[0] = u
-    state[1] = y
-    return y, state
-
-
-# ── Channel definitions (QUBE-Servo 3, HIL driver) ───────────────────────────
-
-_ANA_R = np.array([0],               dtype=np.uint32)
-_ENC_R = np.array([0, 1],            dtype=np.uint32)
-_DIG_R = np.array([0, 1, 2],         dtype=np.uint32)
-_OTH_R = np.array([14000, 14001],    dtype=np.uint32)
-
-_ANA_W = np.array([0],               dtype=np.uint32)
-_DIG_W = np.array([0],               dtype=np.uint32)
-_OTH_W = np.array([11000, 11001, 11002], dtype=np.uint32)
-
-# 512 PPR encoder × 4× quadrature decoding = 2048 counts/rev
-COUNTS_TO_RAD = 2.0 * math.pi / 512.0 / 4.0
-
-
 # ── Physical implementation ───────────────────────────────────────────────────
 class Physical(QubeInterface):
     """
@@ -54,10 +20,12 @@ class Physical(QubeInterface):
     Parameters
     ----------
     dt        : Control-loop timestep [s].  Drives the derivative filter.
-    filter_bw : Derivative filter bandwidth [rad/s]  (default: 100 rad/s).
     """ 
 
     def __init__(self, dt: float = config.CONTROL_DT):
+        # Initialize parrent class
+        super().__init__() 
+
         self.counts_per_rev = 2048.0
         self.rad_per_count = 2.0 * math.pi / self.counts_per_rev
 
@@ -80,7 +48,9 @@ class Physical(QubeInterface):
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
     def open(self) -> None:
-        if not QUANSER_AVAILABLE:
+        if QUANSER_AVAILABLE:
+            if config.DEBUG: print("[Physical] Quanser SDK detected: Initializing physical hardware interface...")
+        else:
             raise RuntimeError(
                 "The Quanser SDK is not installed on this machine.\n"
                 "Physical hardware is only supported on Windows 10/11 (64-bit) and Ubuntu 24.04+.\n"
@@ -94,11 +64,7 @@ class Physical(QubeInterface):
         if config.DEBUG: print("[Physical] HIL card opened.")
 
         # Zero encoders
-        self.card.set_encoder_counts(
-            self.encoder_channels,
-            2,
-            np.array([0, 0], dtype=np.int32)
-        )
+        self.card.set_encoder_counts(self.encoder_channels, 2, np.array([0, 0], dtype=np.int32))
 
         # Initialize outputs
         self.write(0.0)
@@ -108,17 +74,9 @@ class Physical(QubeInterface):
 
 
     def close(self) -> None:
-        self.card.write_analog(
-            self.analog_channel,
-            1,
-            np.array([0.0], dtype=np.float64)
-        )
-
-        self.card.write_digital(
-            self.digital_channel,
-            1,
-            np.array([0], dtype=np.int8)
-        )
+        # Zero outputs
+        self.card.write_analog(self.analog_channel, 1, np.array([0.0], dtype=np.float64))
+        self.card.write_digital(self.digital_channel, 1, np.array([0], dtype=np.int8))
 
         # Set LED to red to indicate shutdown
         self.set_led(1, 0, 0)
@@ -135,11 +93,7 @@ class Physical(QubeInterface):
     
 
     def set_led(self, r: float, g: float, b: float) -> None:
-        self.card.write_other(
-            self.other_write_channels,
-            3,
-            np.array([r, g, b], dtype=np.float64)
-        )
+        self.card.write_other(self.other_write_channels, 3, np.array([r, g, b], dtype=np.float64))
 
 
     def enable(self, on: bool) -> None:
@@ -148,18 +102,10 @@ class Physical(QubeInterface):
 
         if self.enabled:
             # Enable motor
-            self.card.write_digital(
-                self.digital_channel,
-                1,
-                np.array([1], dtype=np.int8)
-            )
+            self.card.write_digital(self.digital_channel, 1, np.array([1], dtype=np.int8))
         else:
             # Disable motor
-            self.card.write_digital(
-                self.digital_channel,
-                1,
-                np.array([0], dtype=np.int8)
-            )
+            self.card.write_digital(self.digital_channel, 1, np.array([0], dtype=np.int8))
 
 
     # ── control loop ──────────────────────────────────────────────────────────
@@ -180,7 +126,6 @@ class Physical(QubeInterface):
         theta_dot = self.other_buffer[0] * self.rad_per_count
         alpha_dot = self.other_buffer[1] * self.rad_per_count
     
-
         return theta, alpha, theta_dot, alpha_dot
 
 

@@ -55,10 +55,10 @@ class Virtual(QubeInterface):
     motor_constant : Motor torque constant [Nm/V]. Default 0.05 Nm/V.
     """
 
-    def __init__(self, dt: float = config.CONTROL_DT, motor_constant: float = config.PLANT_MOTOR_CONSTANT):
+    def __init__(self, dt: float = config.CONTROL_DT):
         """ Initialize the MuJoCo simulator. """
         # Initialize parrent class
-        super().__init__(motor_constant)  
+        super().__init__()  
 
         # Simulator parameters
         self.dt = dt
@@ -257,17 +257,6 @@ class Virtual(QubeInterface):
 
         # Step the simulation
         mujoco.mj_step(self.model, self.data)
-
-        # Update real-time timing with active catch-up
-        self.run_time += self.dt
-        self.target_time += self.tick_time
-        self.sleep_time = self.target_time - time.time()
-        if self.sleep_time > 0:
-            # Ahead of schedule: Sleep to maintain timing
-            time.sleep(self.sleep_time)
-        elif config.DEBUG and self.sleep_time < -self.tick_time * 0.1:
-            # Behind schedule: Report lag and skip sleep to catch up on next iteration
-            print(f"[Control] Behind: {-self.sleep_time*1000:.1f}ms (catching up...)")
         
         # Sync viewer if active
         if self.viewer is not None:
