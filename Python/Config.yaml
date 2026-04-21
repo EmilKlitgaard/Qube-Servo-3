@@ -1,4 +1,4 @@
-DEBUG: true
+DEBUG: false
 
 GUI:
   ENABLED: true                 # Whether to enable the GUI (Only applies if VISUALIZE is false)
@@ -19,8 +19,8 @@ CONTROL:
   MODERN_STABILIZATION: true    # Use modern stabilization method (true) or traditional method (false)
   
   # Voltage limits
-  VOLTAGE_MAX: 3.0             # Maximum motor voltage [V]
-  VOLTAGE_MIN: -3.0            # Minimum motor voltage [V]
+  VOLTAGE_MAX: 5.0             # Maximum motor voltage [V]
+  VOLTAGE_MIN: -5.0            # Minimum motor voltage [V]
 
 PLANT:
   # Physical/simulation parameters (NOT CORRECT VALUES, MUST BE TUNED)

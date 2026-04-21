@@ -47,9 +47,9 @@ class SwingUp:
         # Phase parameters
         self.alpha_dot_threshold = math.radians(10)         # 10 degrees/s in radians/s
         self.far_up_threshold = 10      # Threshold for considering pendulum upright (degrees from vertical)
-        self.up_threshold = 30    # Threshold for considering pendulum down (degrees from vertical)
-        self.down_threshold = 5
-        self.target_theta = 30.0  # Target arm angle for swing-up phases (updated dynamically)
+        self.up_threshold = 45    # Threshold for considering pendulum down (degrees from vertical)
+        self.down_threshold = 10
+        self.target_theta = 15  # Target arm angle for swing-up phases (updated dynamically)
     
 
     def is_far_upright(self, alpha: float) -> bool:
@@ -185,7 +185,7 @@ class SwingUp:
                     if abs(error) < 0.05:  # Within 0.005 rad of target
                         self.phase = self.PHASE_WAIT_SWING
                     else:
-                        voltage = 10.0 * error
+                        voltage = 10.0 * (error / abs(error)) if error != 0 else 0.0  # Move at max speed in direction of error
             
                 # Phase 1: Await for pendulum to reach bottom position (alpha close to π)
                 case self.PHASE_WAIT_SWING:
@@ -193,7 +193,7 @@ class SwingUp:
                     error = target_theta - theta
                     
                     # Wait for pendulum to reach bottom region (alpha close to π)            
-                    if self.is_down(alpha) and alpha_dot < 0:
+                    if self.is_down(alpha) and alpha_dot > 0:
                         self.phase = self.PHASE_RAPID_MOVE
                     else:
                         # Gently move toward target (Previus 2.0)
@@ -207,7 +207,7 @@ class SwingUp:
                     if abs(error) < 0.05:  # Within 0.005 rad of target
                         self.phase = self.PHASE_WAIT_BOTTOM
                     else:
-                        voltage = 10.0 * error
+                        voltage = 10.0 * (error / abs(error)) if error != 0 else 0.0  # Move at max speed in direction of error
                 
                 # Phase 3: Await for pendulum to reach bottom position (alpha close to π)
                 case self.PHASE_WAIT_BOTTOM:
@@ -215,7 +215,7 @@ class SwingUp:
                     error = target_theta - theta
                     
                     # Wait for pendulum to reach bottom region (alpha close to π)            
-                    if self.is_down(alpha) and alpha_dot > 0:
+                    if self.is_down(alpha) and alpha_dot < 0:
                         self.phase = self.PHASE_INIT
                     else:
                         # Gently move toward target (Previus 2.0)
