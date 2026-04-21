@@ -5,7 +5,7 @@ class controller:
     def __init__(self):
         # PD gains
         self.Kp_alpha = 35.0
-        self.Kd_alpha = 2.0
+        self.Kd_alpha = 1.0
 
         self.Kp_theta = 3.0
         self.Kd_theta = 0.5
@@ -44,32 +44,45 @@ class controller:
     def swing_up(self, theta, alpha, theta_dot, alpha_dot):
 
         alpha = self.wrap_to_pi(alpha)
-        
-        if abs(alpha) > 0.2 and abs(alpha_dot) > 0.01:
-            
+    
+        # Pendulum energy:
+        E = 0.5 * self.jp * alpha_dot**2 + self.mp * self.g * self.lp * (1.0 - math.cos(alpha))
 
-            # Pendulum energy:
-            E = 0.5 * self.jp * alpha_dot**2 + self.mp * self.g * self.lp * (1.0 - math.cos(alpha))
+        # Reference energy at upright
+        Er = 2.0 * self.mp * self.g * self.lp
 
-            # Reference energy at upright
-            Er = 2.0 * self.mp * self.g * self.lp
+        direction = 0.0
+        s = alpha_dot * math.cos(alpha)
+        if s > 0.0:
+            direction = -1.0
+        elif s <= 0.0:
+            direction = 1.0
 
-            direction = 0.0
-            s = alpha_dot * math.cos(alpha)
-            if s > 0.0:
-                direction = -1.0
-            elif s < 0.0:
-                direction = 1.0
-
-            V = self.Ke * (E - Er) * direction
-
-        else:
-            if theta <= 0.0:
-                V = 5.0
-            elif theta > 0.0:
-                V = -5.0
-                
+        V = self.Ke * (E - Er) * direction                
 
         return max(min(V, self.max_voltage), -self.max_voltage)
     
-    
+    def pid(self, theta, alpha, theta_dot, alpha_dot, dt):
+        Kp = 30
+        Kd = 1
+        Ki = 1
+        dt += 0.001
+
+        alpha_err = self.wrap_to_pi(alpha - math.pi)
+
+        if not hasattr(self, "int_alpha"):
+            self.int_alpha = 0.0
+
+        self.int_alpha += alpha_err * dt
+        self.int_alpha = max(min(self.int_alpha, 0.5), -0.5) # anti-windup
+       
+
+        V = (
+            Kp * alpha_err
+            + Kd * alpha_dot
+            + Ki * self.int_alpha
+            + self.Kp_theta * theta
+            + self.Kd_theta * theta_dot
+        )
+
+        return max(min(V, self.max_voltage), -self.max_voltage)
