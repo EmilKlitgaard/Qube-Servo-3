@@ -57,22 +57,25 @@ class Physical(QubeInterface):
     filter_bw : Derivative filter bandwidth [rad/s]  (default: 100 rad/s).
     """ 
 
-    def __init__(self, dt: float = config.CONTROL_DT, filter_bw: float = 100.0):
-        self.Ts = dt
-        self.freq = 1.0 / dt
-        self.filt_bw = filter_bw
+    def __init__(self, dt: float = config.CONTROL_DT):
+        self.counts_per_rev = 2048.0
+        self.rad_per_count = 2.0 * math.pi / self.counts_per_rev
 
-        self.card = None
-        self.task = None
+        # Read channels
+        self.encoder_channels = np.array([0, 1], dtype=np.uint32)
+        self.other_channels = np.array([14000, 14001], dtype=np.uint32)
 
-        # Read buffers
-        self.ana_buf = np.zeros(len(_ANA_R), dtype=np.float64)
-        self.enc_buf = np.zeros(len(_ENC_R), dtype=np.int32)
-        self.dig_buf = np.zeros(len(_DIG_R), dtype=np.int8)
-        self.oth_buf = np.zeros(len(_OTH_R), dtype=np.float64)
+        # Write channels
+        self.analog_channel = np.array([0], dtype=np.uint32)
+        self.digital_channel = np.array([0], dtype=np.uint32)
+        self.other_write_channels = np.array([11000, 11001, 11002], dtype=np.uint32)
 
-        # Derivative filter state  [u_prev, y_prev]
-        self.ddt_state = np.zeros(2, dtype=np.float64)
+        # Buffers
+        self.encoder_buffer = np.zeros(2, dtype=np.int32)
+        self.other_buffer = np.zeros(2, dtype=np.float64)
+        self.analog_buffer = np.zeros(1, dtype=np.float64)
+        self.digital_buffer = np.zeros(1, dtype=np.int8)
+        self.other_write_buffer = np.zeros(3, dtype=np.float64)
 
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
@@ -85,26 +88,42 @@ class Physical(QubeInterface):
                 "  Linux instructions: https://github.com/quanser/quanser_sdk_linux\n"
                 "On macOS, use Virtual() instead."
             )
+        
+        # Open HIL card
         self.card = HIL("qube_servo3_usb", "0")
-        print("[Physical] HIL card opened.")
+        if config.DEBUG: print("[Physical] HIL card opened.")
+
+        # Zero encoders
+        self.card.set_encoder_counts(
+            self.encoder_channels,
+            2,
+            np.array([0, 0], dtype=np.int32)
+        )
+
+        # Initialize outputs
+        self.write(0.0)
+
+        # Set LED to green to indicate ready state
+        self.set_led(0, 1, 0)
 
 
     def close(self) -> None:
-        if self.card is None:
-            return
-        self.write(0.0)
-        self.set_led(1.0, 0.0, 0.0)
-        self.enable(False)
-        if self.task is not None:
-            try:
-                self.card.task_stop(self.task)
-                self.card.task_delete(self.task)
-            except Exception:
-                pass
-            self.task = None
+        self.card.write_analog(
+            self.analog_channel,
+            1,
+            np.array([0.0], dtype=np.float64)
+        )
+
+        self.card.write_digital(
+            self.digital_channel,
+            1,
+            np.array([0], dtype=np.int8)
+        )
+
+        # Set LED to red to indicate shutdown
+        self.set_led(1, 0, 0)
+
         self.card.close()
-        self.card = None
-        print("[Physical] HIL card closed.")
 
 
     # ── initialisation helpers ─────────────────────────────────────────────────
@@ -112,15 +131,14 @@ class Physical(QubeInterface):
         # Reset parrent class
         super().reset()
 
-        self.card.set_encoder_counts(
-            _ENC_R, len(_ENC_R), np.zeros(len(_ENC_R), dtype=np.int32)
-        )
-        self.ddt_state[:] = 0.0
+        self.enable(False)  # Disable motor
     
 
     def set_led(self, r: float, g: float, b: float) -> None:
         self.card.write_other(
-            _OTH_W, len(_OTH_W), np.array([r, g, b], dtype=np.float64)
+            self.other_write_channels,
+            3,
+            np.array([r, g, b], dtype=np.float64)
         )
 
 
@@ -128,40 +146,50 @@ class Physical(QubeInterface):
         # Update parrent class state
         super().enable(on) 
 
-        # Always zero the voltage before toggling the amplifier
-        self.card.write_analog(
-            _ANA_W, len(_ANA_W), np.zeros(len(_ANA_W), dtype=np.float64)
-        )
-        self.card.write_digital(
-            _DIG_W, len(_DIG_W), np.array([1 if on else 0], dtype=np.int8)
-        )
+        if self.enabled:
+            # Enable motor
+            self.card.write_digital(
+                self.digital_channel,
+                1,
+                np.array([1], dtype=np.int8)
+            )
+        else:
+            # Disable motor
+            self.card.write_digital(
+                self.digital_channel,
+                1,
+                np.array([0], dtype=np.int8)
+            )
 
 
     # ── control loop ──────────────────────────────────────────────────────────
-    def read(self) -> tuple[float, float]:
-        if self.task is None:
-            self.task = self.card.task_create_reader(
-                1000,
-                _ANA_R, len(_ANA_R),
-                _ENC_R, len(_ENC_R),
-                _DIG_R, len(_DIG_R),
-                _OTH_R, len(_OTH_R),
-            )
-            samples = (2**32 - 1)
-            self.card.task_start(self.task, 0, self.freq, samples)
-
-        self.card.task_read(
-            self.task, 1,
-            self.ana_buf, self.enc_buf, self.dig_buf, self.oth_buf,
+    def read(self) -> tuple[float, float, float, float]:
+        self.card.read(
+            None, 0,
+            self.encoder_channels, 2,
+            None, 0,
+            self.other_channels, 2,
+            None,
+            self.encoder_buffer,
+            None,
+            self.other_buffer
         )
 
-        theta = COUNTS_TO_RAD * float(self.enc_buf[0])
-        theta_dot, self.ddt_state = ddt_filter(theta, self.ddt_state, self.filt_bw, self.Ts)
-        return theta, theta_dot
+        theta = self.encoder_buffer[0] * self.rad_per_count
+        alpha = self.encoder_buffer[1] * self.rad_per_count
+        theta_dot = self.other_buffer[0] * self.rad_per_count
+        alpha_dot = self.other_buffer[1] * self.rad_per_count
+    
+
+        return theta, alpha, theta_dot, alpha_dot
 
 
     def write(self, voltage: float) -> None:
         # update parrent class state
         super().write(voltage)
 
-        self.card.write_analog(_ANA_W, len(_ANA_W), np.array([self.voltage_demand], dtype=np.float64))
+        self.analog_buffer[0] = self.voltage_demand
+        self.card.write_analog(self.analog_channel, 1, self.analog_buffer)
+
+        # Set LED to blue when motor is active
+        self.set_led(0, 0, 1) if self.enabled else self.set_led(1, 0, 0)

@@ -185,7 +185,7 @@ class Virtual(QubeInterface):
 
 
     # ── Control loop ───────────────────────────────────────────────────────────
-    def read(self) -> Tuple[float, float, float, float]:
+    def read(self) -> tuple[float, float, float, float]:
         """
         Read the current simulation state without stepping physics.
         
