@@ -22,16 +22,27 @@ class QubeInterface(ABC):
             voltage = my_controller(theta, theta_dot, alpha, alpha_dot)
             qube.write(voltage)
     """
-    def __init__(self, motor_constant) -> None:
+    def __init__(self, dt: float, motor_constant: float = config.PLANT_MOTOR_CONSTANT) -> None:
         """Initialize parrent class."""
         # Control state
         self.enabled = False
         self.voltage_demand = 0.0
         self.motor_constant = motor_constant
 
+        # Timing variables for real-time control
+        self.dt = dt
+        self.run_time = 0.0
+        self.tick_time = self.dt / config.QUBE_SIMULATION_SPEED
+        self.target_time = time.time()   # Target time for next step (enables catch-up if falling behind)
+
         # Target state
         self.target_theta = 0.0
         self.target_alpha = 0.0
+
+        # LED states
+        self.led_r = 0.0
+        self.led_g = 0.0
+        self.led_b = 0.0
 
         # Flag for starting control loop (used in GUI mode to wait for user input)
         self.loop_running = False
@@ -64,8 +75,6 @@ class QubeInterface(ABC):
     @abstractmethod
     def reset(self) -> None:
         """Zero encoder counts (Physical) or simulation state (Virtual)."""
-        # Reset internal state
-        self.voltage_demand = 0.0
 
     
     def await_start(self) -> None:
@@ -89,18 +98,17 @@ class QubeInterface(ABC):
         if config.DEBUG: print(f"[Virtual] New target: theta={math.degrees(theta):.1f}°, alpha={math.degrees(alpha):.1f}°")
 
 
+    @abstractmethod
     def enable(self, on: bool) -> None:
         """Enable (True) or disable (False) the motor amplifier."""
-        if on:
-            self.enabled = True
-        else:
-            self.enabled = False
-            self.voltage_demand = 0.0
 
 
     @abstractmethod
     def set_led(self, r: float, g: float, b: float) -> None:
         """Set the RGB LED."""
+        self.led_r = max(0.0, min(1.0, r))
+        self.led_g = max(0.0, min(1.0, g))
+        self.led_b = max(0.0, min(1.0, b))
 
 
     # ── control loop ──────────────────────────────────────────────────────────
@@ -128,3 +136,15 @@ class QubeInterface(ABC):
 
         # Store and saturate voltage to amplifier limit
         self.voltage_demand = max(config.CONTROL_VOLTAGE_MIN, min(config.CONTROL_VOLTAGE_MAX, voltage))
+
+        # Update real-time timing with active catch-up
+        self.run_time += self.dt
+        self.target_time += self.tick_time
+        self.sleep_time = self.target_time - time.time()
+        if self.sleep_time > 0:
+            # Ahead of schedule: Sleep to maintain timing
+            time.sleep(self.sleep_time)
+        elif config.DEBUG and self.sleep_time < -self.tick_time * 0.1:
+            # Behind schedule: Report lag and skip sleep to catch up on next iteration
+            #print(f"[Control] Behind: {-self.sleep_time*1000:.1f}ms (catching up...)")
+            pass

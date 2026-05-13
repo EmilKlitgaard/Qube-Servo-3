@@ -11,40 +11,6 @@ from Config import config
 from .QubeInterface import QubeInterface
 
 
-# ── DSP helpers ───────────────────────────────────────────────────────────────
-
-def ddt_filter(u: float, state: np.ndarray, A: float, Ts: float):
-    """
-    Derivative with filtering, Tustin-discretised:  y = A·s / (s + A)
-
-    Parameters
-    ----------
-    u     : Current input sample.
-    state : np.ndarray([u_prev, y_prev], dtype=float64) — mutated in place.
-    A     : Filter bandwidth [rad/s].
-    Ts    : Sample period [s].
-    """
-    y = (2*A*u - 2*A*state[0] - state[1]*(A*Ts - 2)) / (A*Ts + 2)
-    state[0] = u
-    state[1] = y
-    return y, state
-
-
-# ── Channel definitions (QUBE-Servo 3, HIL driver) ───────────────────────────
-
-_ANA_R = np.array([0],               dtype=np.uint32)
-_ENC_R = np.array([0, 1],            dtype=np.uint32)
-_DIG_R = np.array([0, 1, 2],         dtype=np.uint32)
-_OTH_R = np.array([14000, 14001],    dtype=np.uint32)
-
-_ANA_W = np.array([0],               dtype=np.uint32)
-_DIG_W = np.array([0],               dtype=np.uint32)
-_OTH_W = np.array([11000, 11001, 11002], dtype=np.uint32)
-
-# 512 PPR encoder × 4× quadrature decoding = 2048 counts/rev
-COUNTS_TO_RAD = 2.0 * math.pi / 512.0 / 4.0
-
-
 # ── Physical implementation ───────────────────────────────────────────────────
 class Physical(QubeInterface):
     """
@@ -54,10 +20,12 @@ class Physical(QubeInterface):
     Parameters
     ----------
     dt        : Control-loop timestep [s].  Drives the derivative filter.
-    filter_bw : Derivative filter bandwidth [rad/s]  (default: 100 rad/s).
     """ 
 
     def __init__(self, dt: float = config.CONTROL_DT):
+        # Initialize parrent class
+        super().__init__(dt)
+
         self.counts_per_rev = 2048.0
         self.rad_per_count = 2.0 * math.pi / self.counts_per_rev
 
@@ -80,7 +48,9 @@ class Physical(QubeInterface):
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
     def open(self) -> None:
-        if not QUANSER_AVAILABLE:
+        if QUANSER_AVAILABLE:
+            if config.DEBUG: print("[Physical] Quanser SDK detected: Initializing physical hardware interface...")
+        else:
             raise RuntimeError(
                 "The Quanser SDK is not installed on this machine.\n"
                 "Physical hardware is only supported on Windows 10/11 (64-bit) and Ubuntu 24.04+.\n"
@@ -90,15 +60,15 @@ class Physical(QubeInterface):
             )
         
         # Open HIL card
-        self.card = HIL("qube_servo3_usb", "0")
-        if config.DEBUG: print("[Physical] HIL card opened.")
+        try:
+            self.card = HIL("qube_servo3_usb", "0")
+            if config.DEBUG: print("[Physical] HIL card opened.")
+
+        except Exception as e:
+            raise RuntimeError(f"[Physical] Failed to initialize HIL card: {e}")
 
         # Zero encoders
-        self.card.set_encoder_counts(
-            self.encoder_channels,
-            2,
-            np.array([0, 0], dtype=np.int32)
-        )
+        #self.card.set_encoder_counts(self.encoder_channels, 2, np.array([0, 0], dtype=np.int32))
 
         # Initialize outputs
         self.write(0.0)
@@ -108,17 +78,9 @@ class Physical(QubeInterface):
 
 
     def close(self) -> None:
-        self.card.write_analog(
-            self.analog_channel,
-            1,
-            np.array([0.0], dtype=np.float64)
-        )
-
-        self.card.write_digital(
-            self.digital_channel,
-            1,
-            np.array([0], dtype=np.int8)
-        )
+        # Zero outputs
+        self.card.write_analog(self.analog_channel, 1, np.array([0.0], dtype=np.float64))
+        self.card.write_digital(self.digital_channel, 1, np.array([0], dtype=np.int8))
 
         # Set LED to red to indicate shutdown
         self.set_led(1, 0, 0)
@@ -128,38 +90,26 @@ class Physical(QubeInterface):
 
     # ── initialisation helpers ─────────────────────────────────────────────────
     def reset(self) -> None:
-        # Reset parrent class
-        super().reset()
-
         self.enable(False)  # Disable motor
     
 
     def set_led(self, r: float, g: float, b: float) -> None:
-        self.card.write_other(
-            self.other_write_channels,
-            3,
-            np.array([r, g, b], dtype=np.float64)
-        )
+        # Update internal state
+        super().set_led(r, g, b)  
+        
+        self.card.write_other(self.other_write_channels, 3, np.array([self.led_r, self.led_g, self.led_b], dtype=np.float64))
 
 
     def enable(self, on: bool) -> None:
-        # Update parrent class state
-        super().enable(on) 
-
-        if self.enabled:
+        if on:
             # Enable motor
-            self.card.write_digital(
-                self.digital_channel,
-                1,
-                np.array([1], dtype=np.int8)
-            )
+            self.enabled = True
+            self.card.write_digital(self.digital_channel, 1, np.array([1], dtype=np.int8))
         else:
             # Disable motor
-            self.card.write_digital(
-                self.digital_channel,
-                1,
-                np.array([0], dtype=np.int8)
-            )
+            self.enabled = False
+            self.voltage_demand = 0.0
+            self.card.write_digital(self.digital_channel, 1, np.array([0], dtype=np.int8))
 
 
     # ── control loop ──────────────────────────────────────────────────────────
@@ -179,17 +129,16 @@ class Physical(QubeInterface):
         alpha = self.encoder_buffer[1] * self.rad_per_count
         theta_dot = self.other_buffer[0] * self.rad_per_count
         alpha_dot = self.other_buffer[1] * self.rad_per_count
-    
+        
+        # Correctly handle alpha angle wrapping (e.g., 359° ≈ -1° for control purposes)
+        alpha = abs((alpha + math.radians(180)) % math.radians(360))
 
-        return theta, alpha, theta_dot, alpha_dot
+        return theta, theta_dot, alpha, alpha_dot
 
 
     def write(self, voltage: float) -> None:
-        # update parrent class state
+        # Update parrent class state
         super().write(voltage)
 
         self.analog_buffer[0] = self.voltage_demand
         self.card.write_analog(self.analog_channel, 1, self.analog_buffer)
-
-        # Set LED to blue when motor is active
-        self.set_led(0, 0, 1) if self.enabled else self.set_led(1, 0, 0)

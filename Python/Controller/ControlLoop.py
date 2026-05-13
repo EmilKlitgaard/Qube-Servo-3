@@ -54,9 +54,6 @@ def on_target(theta: float, theta_dot: float, alpha: float, alpha_dot: float, th
     -------
     bool : True if on target, False otherwise.
     """
-
-    # Correctly handle alpha angle wrapping (e.g., 359° ≈ -1° for control purposes)
-    alpha = alpha % (math.radians(360))
     
     # Define thresholds for being "on target"
     theta_threshold = math.radians(2)       # 2 degrees
@@ -163,7 +160,7 @@ def run_controller(qube: QubeInterface, logger: Logger, stop_event: threading.Ev
             
             # Periodic status output
             if config.DEBUG and (iteration % 100) == 0:
-                print(f"[{qube.run_time:.2f}s] \tTheta: {math.degrees(theta):+.4f}°, \talpha: {math.degrees(alpha):+.4f}°, \tvoltage: {voltage:+.2f}V, \tmode: {mode}")
+                print(f"[{qube.run_time:.2f}s] \tTheta: {math.degrees(theta):+.4f}°, \talpha: {math.degrees(alpha):+.4f}°, \ttheta_dot: {theta_dot:+.2f} rad/s, \talpha_dot: {alpha_dot:+.2f} rad/s, \tvoltage: {voltage:+.2f}V, \tmode: {mode}")
 
         if config.DEBUG: print(f"\n[Control] Control loop completed after {qube.run_time:.2f} s (simulation time)")
     
