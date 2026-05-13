@@ -41,6 +41,7 @@ class Controller:
         self.mode = "swingup"  # "swingup" or "stabilize"
 
 
+
     def compute_modern_stabilize(self, theta: float, theta_dot: float, alpha: float, alpha_dot: float, theta_target: float = 0.0, alpha_target: float = 0.0) -> float:
         """
         Stabilization controller (LQR-like state feedback).
@@ -101,9 +102,12 @@ class Controller:
         theta_error = theta - theta_target
     
         # PD control: u = -Kp * alpha_error - Kd * alpha_dot
-        Kp = 60.0  # Proportional gain for angle error
-        Kd = 10.0   # Derivative gain for angular velocity
-        voltage = (Kp * alpha_error) + (Kd * alpha_dot) + (3.0 * theta_error) + (3.0 * theta_dot)  # Add arm stabilization terms
+        # decent vals = 49, 5.0, 3, 3
+        Kp = 35  # Proportional gain for angle error
+        Kd = 1   # Derivative gain for angular velocity
+        Kp_theta = 3  # Proportional gain for arm angle error
+        Kd_theta = 0.5  # Derivative gain for arm angular velocity  
+        voltage = (Kp * alpha_error) + (Kd * alpha_dot) + (Kp_theta * theta_error) + (Kd_theta * theta_dot)  # Add arm stabilization terms
 
         return voltage
 
@@ -123,6 +127,17 @@ class Controller:
         -------
         voltage : Motor voltage command [V], saturated to [-18, +10].
         mode : Current mode: "swingup" or "stabilize".
+      
+          """
+        """
+        if theta > math.radians(100) or theta < math.radians(-100):
+            #if config.DEBUG: 
+            print("[Controller] Arm exceeded ±100 degrees. Switching back to swing-up mode.")
+            self.swingup.phase = self.swingup.PHASE_INIT # Reset swing-up phase
+            self.mode = "swingup"
+             # Delay to prevent immediate re-triggering
+            for i in range (1, 1000):
+                    print()
         """
 
         if self.mode == "swingup":
