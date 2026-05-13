@@ -1,4 +1,4 @@
-from qube import qube
+from Python.qube import qube
 from controller import controller
 import time
 from time import sleep
