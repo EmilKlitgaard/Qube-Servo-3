@@ -39,6 +39,12 @@ class Controller:
 
         # Internal state
         self.mode = "swingup"  # "swingup" or "stabilize"
+        
+    def torque_to_voltage(self, torque: float, theta_dot: float) -> float:
+        # V = R/kt * torque + Ke * theta_dot
+       
+        voltage = (config.PLANT_MOTOR_RESISTANCE / config.PLANT_TORQUE_CONSTANT) * torque + (config.PLANT_MOTOR_CONSTANT * theta_dot)
+        return max(config.CONTROL_VOLTAGE_MIN, min(config.CONTROL_VOLTAGE_MAX, voltage))  # Saturate to limits
 
 
 
@@ -103,11 +109,12 @@ class Controller:
     
         # PD control: u = -Kp * alpha_error - Kd * alpha_dot
         # decent vals = 49, 5.0, 3, 3
-        Kp = 35  # Proportional gain for angle error
-        Kd = 1   # Derivative gain for angular velocity
-        Kp_theta = 3  # Proportional gain for arm angle error
-        Kd_theta = 0.5  # Derivative gain for arm angular velocity  
-        voltage = (Kp * alpha_error) + (Kd * alpha_dot) + (Kp_theta * theta_error) + (Kd_theta * theta_dot)  # Add arm stabilization terms
+        Kp = 0.225  # Proportional gain for angle error
+        Kd = 0.015   # Derivative gain for angular velocity
+        Kp_theta = 0.01875  # Proportional gain for arm angle error
+        Kd_theta = 0.003  # Derivative gain for arm angular velocity  
+        torque = (Kp * alpha_error) + (Kd * alpha_dot) + (Kp_theta * theta_error) + (Kd_theta * theta_dot)  # Add arm stabilization terms
+        voltage = self.torque_to_voltage(torque, theta_dot)
 
         return voltage
 
