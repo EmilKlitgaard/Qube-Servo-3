@@ -23,8 +23,8 @@ if __name__ == "__main__":
             #print(a_wrapped)
             if a_wrapped > 2.5 or a_wrapped < -2.5: # if pendulum is near upright
                 #print("Balance controller")
-                V = ctrl.classic_pd(theta, alpha, theta_dot, alpha_dot) # control
-                #V = ctrl.pid(theta, alpha, theta_dot, alpha_dot, T)
+                #V = ctrl.classic_pd(theta, alpha, theta_dot, alpha_dot) # control
+                V = ctrl.LQR(theta, alpha, theta_dot, alpha_dot)
             else:
                 #print("Swing-up controller")
                 V = ctrl.swing_up(theta, alpha, theta_dot, alpha_dot) # swingup
