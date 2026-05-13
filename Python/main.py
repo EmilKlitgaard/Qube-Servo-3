@@ -21,7 +21,7 @@ def validate_environment():
         
         # Check if we're already running under mjpython (via environment variable)
         is_mjpython = os.environ.get("MJPYTHON_LAUNCHER", "false").lower() == "true"
-        
+        """
         if not is_mjpython:
             import sys
             import subprocess
@@ -40,7 +40,7 @@ def validate_environment():
                 print("[Main] ERROR: mjpython not found. Install MuJoCo or disable QUBE_VISUALIZE in Config.yaml")
                 sys.exit(1)
 
-
+"""
 # ╔═══════════════════════════════════════════════════╗
 # ║                      THREADS                      ║
 # ╚═══════════════════════════════════════════════════╝
@@ -116,6 +116,7 @@ def control_loop(qube: QubeInterface, logger, stop_event: threading.Event) -> No
     except Exception as e:
         print(f"[Control] Error in control loop: {e}")
         if config.DEBUG:
+            
             import traceback
             traceback.print_exc()
     

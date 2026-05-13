@@ -222,6 +222,6 @@ class SwingUp:
                         voltage = 10.0 * error
 
         # Print info for debugging in degrees
-        if config.DEBUG: print(f"[SwingUp] Phase: {self.phase}, theta: {math.degrees(theta):.1f}°, alpha: {math.degrees(alpha):.1f}°, alpha_dot: {math.degrees(alpha_dot):.1f}°/s")
+        if config.DEBUG: print(f"[SwingUp] Phase: {self.phase}, theta: {math.degrees(theta):.1f}°, alpha: {math.degrees(alpha):.1f}°, alpha_dot: {math.degrees(alpha_dot):.1f}, voltage: {voltage:.1f}")
         
         return voltage

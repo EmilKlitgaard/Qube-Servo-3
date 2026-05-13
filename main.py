@@ -1,5 +1,5 @@
 from Python.qube import qube
-from controller import controller
+from nej import controller
 import time
 from time import sleep
 import math
