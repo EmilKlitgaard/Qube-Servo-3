@@ -224,7 +224,11 @@ class SwingUp:
                         voltage = 10.0 * error
 
         # Print info for debugging in degrees
+<<<<<<< HEAD
         if config.DEBUG: print(f"[SwingUp] Phase: {self.phase}, theta: {math.degrees(theta):.1f}°, theta_dot: {math.degrees(theta_dot):.1f}°/s, alpha: {math.degrees(alpha):.1f}°, alpha_dot: {math.degrees(alpha_dot):.1f}°/s")
+=======
+        if config.DEBUG: print(f"[SwingUp] Phase: {self.phase}, theta: {math.degrees(theta):.1f}°, alpha: {math.degrees(alpha):.1f}°, alpha_dot: {math.degrees(alpha_dot):.1f}, voltage: {voltage:.1f}")
+>>>>>>> e2572b86e4eaf24d53befbd438accd5f03ee8007
         
         #self.theta_dot_lst = np.append(self.theta_dot_lst, math.degrees(theta_dot))
         #print(np.mean(self.theta_dot_lst[-1000:]))  # Print average of last 100 theta_dot values for debugging

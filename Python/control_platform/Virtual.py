@@ -243,6 +243,7 @@ class Virtual(QubeInterface):
         # Apply control: convert voltage to torque
         if self.enabled:
             torque = self.voltage_demand * self.motor_constant
+            
         else:
             torque = 0.0
 

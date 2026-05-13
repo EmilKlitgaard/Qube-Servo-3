@@ -116,6 +116,7 @@ def control_loop(qube: QubeInterface, logger, stop_event: threading.Event) -> No
     except Exception as e:
         print(f"[Control] Error in control loop: {e}")
         if config.DEBUG:
+            
             import traceback
             traceback.print_exc()
     
