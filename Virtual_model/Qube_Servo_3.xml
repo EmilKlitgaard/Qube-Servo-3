@@ -24,7 +24,7 @@
 
     <!-- Motor axis -->
     <body name="motor_axis" pos="0 0 0.123">
-      <geom type="cylinder" size="0.011" fromto="0 0 -0.011 0 0 -0.0228" mass="0.01" material="joint_mat"/>
+      <geom type="cylinder" size="0.011" fromto="0 0 -0.011 0 0 -0.0228" mass="0.0106" material="joint_mat"/>
       
       <!-- Encode attatched to motor -->
       <body name="arm" pos="0 0 0">

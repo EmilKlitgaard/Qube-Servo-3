@@ -2,11 +2,11 @@ DEBUG: true                     # Whether to enable debug mode (prints additiona
 ENERGY_TEST: true               # Whether to perform energy test during swing-up (only applies if DEBUG is true)
 
 GUI:
-  ENABLED: true                 # Whether to enable the GUI (Only applies if VISUALIZE is false)
+  ENABLED: true                # Whether to enable the GUI (Only applies if VISUALIZE is false)
   UPDATE_RATE: 100              # GUI update rate in Hz (only applies if ENABLED is true)
 
 UART:
-  PORT: /dev/cu.usbmodem0E2208FC1
+  PORT: COM4
   BAUDRATE: 230400
 
 QUBE:
@@ -25,13 +25,14 @@ CONTROL:
 
 PLANT:
   # Physical/simulation parameters (NOT CORRECT VALUES, MUST BE TUNED)
-  MOTOR_CONSTANT: 0.0422        # Motor torque constant [Nm/V]
-  MOTOR_RESISTANCE: 7.5         # Motor resistance [Ohm]
+  MOTOR_CONSTANT: 0.0422          # Motor torque constant [Nm/V]
+  TORQUE_CONSTANT: 0.0422         # Torque constant (same as motor constant for direct drive) [Nm/V]
+  MOTOR_RESISTANCE: 7.5          # Motor resistance [Ohms]
   ARM_LENGTH: 0.085             # Distance from pivot to encoder axis [m]
   PENDULUM_LENGTH: 0.129        # Length of pendulum rod [m]
-  ARM_MASS: 0.15                # Mass of arm [kg]
-  PENDULUM_MASS: 0.05           # Mass of pendulum [kg]
-  GRAVITY: 9.82                 # Gravitational acceleration [m/s^2]
+  ARM_MASS: 0.095                # Mass of arm [kg]
+  PENDULUM_MASS: 0.024           # Mass of pendulum [kg]
+  GRAVITY: 9.816                 # Gravitational acceleration [m/s^2]
 
 DATA:
   LOGGING: true                 # Whether to log data for plotting

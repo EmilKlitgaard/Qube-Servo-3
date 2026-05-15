@@ -143,9 +143,11 @@ def run_controller(qube: QubeInterface, logger: Logger, stop_event: threading.Ev
             theta, theta_dot, alpha, alpha_dot = qube.read()
             
             # Compute control from controller
+            # chose contrller type in config
             voltage, mode = controller.compute(theta, theta_dot, alpha, alpha_dot, qube.target_theta, qube.target_alpha)
             
             # Apply control
+            print(f"Voltage command: {voltage:.2f} V")
             qube.write(voltage)
             
             # Log data if logging enabled

@@ -15,6 +15,7 @@ multi-step state machine that follows these steps:
 import math
 import time
 from Config import config
+import numpy as np
 
 class SwingUp:
     """
@@ -103,7 +104,7 @@ class SwingUp:
             match self.phase:
                 # Phase 0: Move arm to -90 degrees (-π/2 ≈ -1.571 rad)
                 case self.PHASE_INIT:
-                    target_theta = -math.radians(90)
+                    target_theta = -math.radians(45)
                     error = target_theta - theta
                     
                     if abs(error) < 0.05:  # Within 0.05 rad of target
@@ -115,7 +116,7 @@ class SwingUp:
             
                 # Phase 1: Await for pendulum swing to settle, while holding arm at -90 degrees
                 case self.PHASE_WAIT_SWING:
-                    target_theta = -math.radians(90)
+                    target_theta = -math.radians(45)
                     error = target_theta - theta
                     
                     # Check if pendulum swing has settled
@@ -128,7 +129,7 @@ class SwingUp:
                 
                 # Phase 2: Rapidly move arm to +10 degrees at max speed
                 case self.PHASE_RAPID_MOVE:
-                    target_theta = math.radians(20)  # +10 degrees in radians
+                    target_theta = math.radians(45)  # +10 degrees in radians
                     error = target_theta - theta
                     
                     if abs(error) < 0.05:  # Within 0.05 rad of target
@@ -139,7 +140,7 @@ class SwingUp:
                 
                 # Phase 3: Await for pendulum to reach bottom position (alpha close to π)
                 case self.PHASE_WAIT_BOTTOM:
-                    target_theta = math.radians(20)  # +10 degrees in radians
+                    target_theta = math.radians(45)  # +10 degrees in radians
                     error = target_theta - theta
                     
                     # Wait for pendulum to reach bottom region (alpha close to π)            
@@ -238,6 +239,9 @@ class SwingUp:
             voltage = self.multiplier * (E - Er) * (-1.0 if s > 0.0 else 1.0)
     
         # Print info for debugging in degrees
-        if config.DEBUG: print(f"[SwingUp] Phase: {self.phase}, theta: {math.degrees(theta):.1f}°, alpha: {math.degrees(alpha):.1f}°, alpha_dot: {math.degrees(alpha_dot):.1f}°/s")
+        if config.DEBUG: print(f"[SwingUp] Phase: {self.phase}, theta: {math.degrees(theta):.1f}°, theta_dot: {math.degrees(theta_dot):.1f}°/s, alpha: {math.degrees(alpha):.1f}°, alpha_dot: {math.degrees(alpha_dot):.1f}°/s")
         
+        #self.theta_dot_lst = np.append(self.theta_dot_lst, math.degrees(theta_dot))
+        #print(np.mean(self.theta_dot_lst[-1000:]))  # Print average of last 100 theta_dot values for debugging
+        #voltage = 2.0
         return voltage

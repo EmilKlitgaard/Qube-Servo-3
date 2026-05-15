@@ -39,6 +39,13 @@ class Controller:
 
         # Internal state
         self.mode = "swingup"  # "swingup" or "stabilize"
+        
+    def torque_to_voltage(self, torque: float, theta_dot: float) -> float:
+        # V = R/kt * torque + Ke * theta_dot
+       
+        voltage = (config.PLANT_MOTOR_RESISTANCE / config.PLANT_TORQUE_CONSTANT) * torque + (config.PLANT_MOTOR_CONSTANT * theta_dot)
+        return max(config.CONTROL_VOLTAGE_MIN, min(config.CONTROL_VOLTAGE_MAX, voltage))  # Saturate to limits
+
 
 
     def compute_modern_stabilize(self, theta: float, theta_dot: float, alpha: float, alpha_dot: float, theta_target: float = 0.0, alpha_target: float = 0.0) -> float:
@@ -101,9 +108,13 @@ class Controller:
         theta_error = theta - theta_target
     
         # PD control: u = -Kp * alpha_error - Kd * alpha_dot
-        Kp = 60.0  # Proportional gain for angle error
-        Kd = 10.0   # Derivative gain for angular velocity
-        voltage = (Kp * alpha_error) + (Kd * alpha_dot) + (3.0 * theta_error) + (3.0 * theta_dot)  # Add arm stabilization terms
+        # decent vals = 49, 5.0, 3, 3
+        Kp = 0.225  # Proportional gain for angle error
+        Kd = 0.015   # Derivative gain for angular velocity
+        Kp_theta = 0.01875  # Proportional gain for arm angle error
+        Kd_theta = 0.003  # Derivative gain for arm angular velocity  
+        torque = (Kp * alpha_error) + (Kd * alpha_dot) + (Kp_theta * theta_error) + (Kd_theta * theta_dot)  # Add arm stabilization terms
+        voltage = self.torque_to_voltage(torque, theta_dot)
 
         return voltage
 
@@ -123,6 +134,17 @@ class Controller:
         -------
         voltage : Motor voltage command [V], saturated to [-18, +10].
         mode : Current mode: "swingup" or "stabilize".
+      
+          """
+        """
+        if theta > math.radians(100) or theta < math.radians(-100):
+            #if config.DEBUG: 
+            print("[Controller] Arm exceeded ±100 degrees. Switching back to swing-up mode.")
+            self.swingup.phase = self.swingup.PHASE_INIT # Reset swing-up phase
+            self.mode = "swingup"
+             # Delay to prevent immediate re-triggering
+            for i in range (1, 1000):
+                    print()
         """
 
         if self.mode == "swingup":
