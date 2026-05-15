@@ -13,6 +13,7 @@ multi-step state machine that follows these steps:
 """
 
 import math
+import time
 from Config import config
 
 class SwingUp:
@@ -47,9 +48,9 @@ class SwingUp:
         # Phase parameters
         self.alpha_dot_threshold = math.radians(10)         # 10 degrees/s in radians/s
         self.far_up_threshold = 10      # Threshold for considering pendulum upright (degrees from vertical)
-        self.up_threshold = 45    # Threshold for considering pendulum down (degrees from vertical)
+        self.up_threshold = 45          # Threshold for considering pendulum down (degrees from vertical)
         self.down_threshold = 10
-        self.target_theta = 15  # Target arm angle for swing-up phases (updated dynamically)
+        self.target_theta = 10          # Target arm angle for swing-up phases (updated dynamically)
     
 
     def is_far_upright(self, alpha: float) -> bool:
@@ -221,6 +222,21 @@ class SwingUp:
                         # Gently move toward target (Previus 2.0)
                         voltage = 10.0 * error
 
+        elif self.SWINGUP_SEQUENCE == 2:
+            # Parameters 
+            self.multiplier = 100
+            self.mp = 0.024
+            self.lp = 0.129
+            self.g = 9.82
+            self.jp = (1/3) * self.mp * self.lp**2
+
+            # Energy-based swing-up control
+            E = 0.5 * self.jp * alpha_dot**2 + self.mp * self.g * self.lp * (1.0 - math.cos(alpha-math.pi))
+            Er = 2.0 * self.mp * self.g * self.lp
+            print(f"[SwingUp] Energy: {E:.4f} J, Target Energy: {Er:.4f} J")
+            s = alpha_dot * math.cos(alpha-math.pi)
+            voltage = self.multiplier * (E - Er) * (-1.0 if s > 0.0 else 1.0)
+    
         # Print info for debugging in degrees
         if config.DEBUG: print(f"[SwingUp] Phase: {self.phase}, theta: {math.degrees(theta):.1f}°, alpha: {math.degrees(alpha):.1f}°, alpha_dot: {math.degrees(alpha_dot):.1f}°/s")
         

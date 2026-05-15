@@ -29,19 +29,19 @@
       <!-- Encode attatched to motor -->
       <body name="arm" pos="0 0 0">
         <geom type="cylinder" size="0.014" fromto="0.01925 0 0 -0.033 0 0" mass="0.0106" material="pendulum_mat"/>
-        <joint name="theta" type="hinge" pos="0 0 0" axis="0 0 1" limited="true" range="-1.5708 1.5708" damping="0.01"/>
-                  
+        <joint name="theta" type="hinge" pos="0 0 0" axis="0 0 1" limited="true" range="-1.5708 1.5708" damping="0.0"/>
+        
         <!-- Pendulum attached to encoder -->
         <body name="pendulum" pos="0.085 0 0">
-          <geom type="capsule" size="0.00325" fromto="-0.118 0 0 0.0025 0 0" mass="0.085" material="arm_mat"/>
+          <geom type="capsule" size="0.00325" fromto="-0.118 0 0 0.0025 0 0" mass="0.095" material="arm_mat"/>
           <geom type="cylinder" size="0.00475" fromto="0 0 0.0075 0 0 -0.1215" mass="0.024" material="pendulum_mat"/>
-          <joint name="alpha" type="hinge" pos="0 0 0" axis="1 0 0" damping="0.0001"/>
+          <joint name="alpha" type="hinge" pos="0 0 0" axis="1 0 0" damping="0.0"/>
         </body>
       </body>
     </body>
   </worldbody>
 
   <actuator>
-    <motor name="arm_motor" joint="theta" gear="1.0" ctrlrange="-1.0 1.0"/>
+    <motor name="arm_motor" joint="theta" gear="6.0" ctrlrange="-0.1 0.1"/>
   </actuator>
 </mujoco>
