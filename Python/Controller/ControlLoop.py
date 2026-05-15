@@ -120,6 +120,7 @@ def run_controller(qube: QubeInterface, logger: Logger, stop_event: threading.Ev
     # Control loop
     try:
         iteration = 0
+        round_time = time.time()
 
         while not stop_event.is_set():
             # Check exit condition
@@ -132,6 +133,12 @@ def run_controller(qube: QubeInterface, logger: Logger, stop_event: threading.Ev
                 if config.DEBUG: print("[Control] Viewer window closed.")
                 break
             
+            # Print round time for debugging
+            """if config.DEBUG: 
+            time_now = time.time()
+            print(f"Round time: {(time_now - round_time) * 1000.0:.3f} ms")
+            round_time = time_now"""
+
             # Read current state
             theta, theta_dot, alpha, alpha_dot = qube.read()
             
@@ -159,7 +166,7 @@ def run_controller(qube: QubeInterface, logger: Logger, stop_event: threading.Ev
             
             # Increment iteration counter
             iteration += 1
-            
+
             # Periodic status output
             if config.DEBUG and (iteration % 100) == 0:
                 print(f"[{qube.run_time:.2f}s] \tTheta: {math.degrees(theta):+.4f}°, \talpha: {math.degrees(alpha):+.4f}°, \ttheta_dot: {theta_dot:+.2f} rad/s, \talpha_dot: {alpha_dot:+.2f} rad/s, \tvoltage: {voltage:+.2f}V, \tmode: {mode}")

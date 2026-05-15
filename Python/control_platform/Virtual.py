@@ -74,6 +74,11 @@ class Virtual(QubeInterface):
         self.startup_theta = 0.0
         self.startup_alpha = 0.0
 
+        # Define constants:
+        self.emf_constant = config.PLANT_MOTOR_CONSTANT         # Back EMF constant [V/(rad/s)]
+        self.torque_constant = config.PLANT_MOTOR_CONSTANT      # Torque constant [Nm/V]
+        self.motor_resistance = config.PLANT_MOTOR_RESISTANCE   # Motor resistance [Ohm]
+
         if config.DEBUG: print("[Virtual] Simulator initialized")
     
 
@@ -217,6 +222,20 @@ class Virtual(QubeInterface):
 
 
     def write(self, voltage: float) -> None:
+        def energy_reached(self, alpha: float, alpha_dot: float) -> bool:
+            """Check if pendulum has reached target energy for swing-up."""
+            # Parameters 
+            mp = 0.024
+            lp = 0.129
+            g = 9.82
+            jp = (1/3) * mp * lp**2
+
+            alpha %= (math.radians(360))
+            mechanical_energy = 0.5 * jp * alpha_dot**2 + mp * g * (0.5 * lp * (1.0 - math.cos(alpha)))
+            target_energy = mp * g * lp
+            print(f"[SwingUp] Energy: {mechanical_energy:.4f} J, Target Energy: {target_energy:.4f} J")
+            return mechanical_energy >= target_energy
+        
         """
         Apply a motor voltage command and advance the simulation.
         
@@ -242,13 +261,33 @@ class Virtual(QubeInterface):
         
         # Apply control: convert voltage to torque
         if self.enabled:
-            torque = self.voltage_demand * self.motor_constant
-            
+            # Joint velocity
+            theta_dot = self.data.joint('theta').qvel.item()
+
+            # Back EMF
+            emf_voltage = self.emf_constant * theta_dot
+
+            # Motor current
+            motor_current = (self.voltage_demand - emf_voltage) / self.motor_resistance
+
+            # Motor torque
+            torque = self.motor_constant * motor_current
         else:
             torque = 0.0
 
         # Set actuator control using named access
         self.data.actuator('arm_motor').ctrl = torque
+
+        if config.ENERGY_TEST:
+            if energy_reached(self, self.data.joint('alpha').qpos.item(), self.data.joint('alpha').qvel.item()):
+                while True:
+                    time.sleep(0.01)
+                    # Lock theta at current position
+                    self.data.joint('theta').qpos = self.data.joint('theta').qpos.item()
+                    self.data.joint('theta').qvel = 0.0
+                    self.data.actuator('arm_motor').ctrl = 0.0
+                    mujoco.mj_step(self.model, self.data)
+                    self.viewer.sync()
 
         # Step the simulation
         mujoco.mj_step(self.model, self.data)

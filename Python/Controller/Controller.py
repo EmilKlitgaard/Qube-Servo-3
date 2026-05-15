@@ -152,9 +152,9 @@ class Controller:
             voltage = self.swingup.compute(theta, theta_dot, alpha, alpha_dot)
 
             # Check if we are close enough to upright to switch to stabilization
-            if self.swingup.is_far_upright(alpha):
-                if config.DEBUG: print("[Controller] Switching to stabilization mode.")
-                self.mode = "stabilize"
+            #if self.swingup.is_far_upright(alpha):
+            #    if config.DEBUG: print("[Controller] Switching to stabilization mode.")
+            #    self.mode = "stabilize"
         else:
             # Compute stabilization voltage
             if config.CONTROL_MODERN_STABILIZATION:
