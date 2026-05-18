@@ -1,6 +1,7 @@
 import math
 import csv
 from datetime import datetime
+from time import sleep
 
 
 class StepMetrics:
@@ -8,11 +9,15 @@ class StepMetrics:
     def __init__(
         self,
         tol=0.05,
-        settle_hold=0.5
+        settle_hold=0.5,
+        loop_count_max = 999
     ):
+        
 
         self.tol = tol
         self.settle_hold = settle_hold
+        self.loop_count = 0
+        self.loop_count_max = loop_count_max
 
         # Create unique filename for each run
         timestamp = datetime.now().strftime(
@@ -173,7 +178,15 @@ class StepMetrics:
                     overshoot_percent,
                     overshoot_deg
                 )
+                
+                
+                self.loop_count += 1
+                if self.loop_count >= self.loop_count_max:
+                    print("Balance metrics completed")
+                    sleep(999)
+                return True
 
         else:
 
             self.in_band_since = None
+            return False

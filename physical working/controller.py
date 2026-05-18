@@ -6,15 +6,18 @@ class controller:
         # PD gains
         
         #model
-        #self.Kp_alpha = 39.3
-        #self.Kd_alpha = 2.56
+        self.Kp_alpha = 37.3
+        self.Kd_alpha = 4.0
         
-        #tuned
-        self.Kp_alpha = 35.0
-        self.Kd_alpha = 1
-
         self.Kp_theta = 3.0
         self.Kd_theta = 0.5
+        
+        #tuned
+        #self.Kp_alpha = 35.0
+        #self.Kd_alpha = 1
+
+        #self.Kp_theta = 3.0
+        #self.Kd_theta = 0.5
 
         self.max_voltage = 10.0
         
@@ -28,7 +31,7 @@ class controller:
         self.jp = (1/3) * self.mp * self.lp**2
 
         # LQR gain 
-        self.K_lqr = [3.0, 35.6839, 0.5, 1]
+        self.K_lqr = [1.9099,   37.1906,   1.0262,    4.4005]
 
     def wrap_to_pi(self, x):
         return (x + math.pi) % (2.0 * math.pi) - math.pi
