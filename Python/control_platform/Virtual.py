@@ -23,6 +23,7 @@ import os
 import math
 import time
 import mujoco
+import numpy as np
 
 from Config import config
 from typing import Tuple, Optional
@@ -34,7 +35,10 @@ def get_model_file_path() -> str:
     Get the absolute path to Qube_Servo_3.xml model file.
     """
     root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    model_file = os.path.join(root_dir, "Virtual_model", "Qube_Servo_3.xml")
+    if config.PENDULUM_TEST_ENABLED:
+        model_file = os.path.join(root_dir, "Virtual_model", "Pendulum_test.xml")
+    else:
+        model_file = os.path.join(root_dir, "Virtual_model", "Qube_Servo_3.xml")
     return model_file
 
 
@@ -74,6 +78,12 @@ class Virtual(QubeInterface):
         self.startup_theta = 0.0
         self.startup_alpha = 0.0
 
+        # Timing variables for real-time control
+        self.dt = dt
+        self.run_time = 0.0
+        self.tick_time = self.dt / config.QUBE_SIMULATION_SPEED
+        self.target_time = time.time()   # Target time for next step (enables catch-up if falling behind)
+
         # Define constants:
         self.emf_constant = config.PLANT_MOTOR_CONSTANT         # Back EMF constant [V/(rad/s)]
         self.torque_constant = config.PLANT_MOTOR_CONSTANT      # Torque constant [Nm/V]
@@ -110,6 +120,27 @@ class Virtual(QubeInterface):
         self.alpha_joint = self.model.joint('alpha')
         self.motor_actuator = self.model.actuator('arm_motor')
 
+        # [OPTIONAL] Pendulum test setup: 
+        if config.PENDULUM_TEST_ENABLED:
+            # Set initial joint positions
+            self.pendulum_angle = math.radians(config.PENDULUM_TEST_START_ANGLE)
+            self.data.joint('alpha').qpos = math.pi                 # Start with pendulum up
+            self.data.joint('pendulum').qpos = self.pendulum_angle  # Set pendulum start angle
+
+            # Get geom IDs for contact force measurement
+            self.pendulum_disturbance_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, "disturbance_capsule")
+            self.pendulum_target_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, "impact_target")
+
+            # Define state variables for pendulum test
+            self.pendulum_locked = True
+            self.pendulum_release_time = None
+            self.pendulum_reset_time = None
+            self.pendulum_joint = self.data.joint("pendulum")
+            self.contact_force = np.zeros(6, dtype=np.float64)
+            self.pendulum_total_impulse = 0.0
+            self.pendulum_peak_force = 0.0
+            self.pendulum_dt = self.model.opt.timestep
+
         # Step 5: Forward kinematics: Compute all body positions and orientations
         mujoco.mj_forward(self.model, self.data)
 
@@ -141,7 +172,7 @@ class Virtual(QubeInterface):
         
         Initial configuration:
         - Arm at center (theta = 0)
-        - Pendulum at upright position (alpha = 0)
+        - Pendulum at down position (alpha = 0)
         - All velocities zeroed
         """
         if self.model is None or self.data is None:
@@ -152,13 +183,23 @@ class Virtual(QubeInterface):
 
         # Set initial generalized coordinates (qpos) using named access
         self.data.joint('theta').qpos = self.startup_theta       # theta = 0 (center)
-        self.data.joint('alpha').qpos = self.startup_alpha       # alpha = 0 (upright)
+        self.data.joint('alpha').qpos = self.startup_alpha       # alpha = 0 (down)
 
         # Zero all generalized velocities (qvel)
         self.data.qvel[:] = 0.0
 
         # Reset target time
         self.target_time = time.time()
+
+        # [OPTIONAL] Pendulum test: Set alpha and pendulum positions 
+        if config.PENDULUM_TEST_ENABLED:
+            # Reset joint positions
+            self.data.joint('alpha').qpos = math.pi                 # Start with pendulum up
+            self.data.joint('pendulum').qpos = self.pendulum_angle  # Set pendulum start angle
+
+            # Lock pendulum in place
+            self.pendulum_locked = True
+            self.pendulum_release_time = time.time() + 5            # Release after 5 seconds
 
         print("[Virtual] Simulation reset.")
 
@@ -278,6 +319,7 @@ class Virtual(QubeInterface):
         # Set actuator control using named access
         self.data.actuator('arm_motor').ctrl = torque
 
+        # [OPTIONAL] Energy test: Lock theta in place once pendulum reaches target energy for swing-up
         if config.ENERGY_TEST:
             if energy_reached(self, self.data.joint('alpha').qpos.item(), self.data.joint('alpha').qvel.item()):
                 while True:
@@ -289,9 +331,49 @@ class Virtual(QubeInterface):
                     mujoco.mj_step(self.model, self.data)
                     self.viewer.sync()
 
+        # [OPTIONAL] Pendulum test:
+        if config.PENDULUM_TEST_ENABLED:
+            if self.pendulum_release_time is not None and self.pendulum_release_time < time.time():
+                self.pendulum_locked = False
+                self.pendulum_release_time = None
+
+            if self.pendulum_reset_time is not None and self.pendulum_reset_time < time.time():
+                self.pendulum_locked = True
+                self.pendulum_reset_time = None
+
+            if self.pendulum_locked:
+                self.data.joint('pendulum').qvel = 0.0
+                self.data.joint('pendulum').qpos = self.pendulum_angle
+
+            for i in range(self.data.ncon):
+                contact = self.data.contact[i]
+                g1 = contact.geom1
+                g2 = contact.geom2
+                if ((g1 == self.pendulum_disturbance_id and g2 == self.pendulum_target_id) or (g2 == self.pendulum_disturbance_id and g1 == self.pendulum_target_id)):
+                    mujoco.mj_contactForce(self.model, self.data, i, self.contact_force)
+                    normal_force = abs(self.contact_force[0])
+                    impulse = normal_force * self.pendulum_dt
+                    self.pendulum_total_impulse += impulse
+                    if normal_force > self.pendulum_peak_force:
+                        self.pendulum_peak_force = normal_force
+                    print(f"Impact force: {normal_force:.2f} N | Impulse: {self.pendulum_total_impulse:.4f} Ns | Peak force: {self.pendulum_peak_force:.2f} N")
+                    self.pendulum_reset_time = time.time() + 0.5 # Reset pendulum 0.5s after impact
+
         # Step the simulation
         mujoco.mj_step(self.model, self.data)
         
         # Sync viewer if active
         if self.viewer is not None:
             self.viewer.sync()
+
+        # Update real-time timing with active catch-up
+        self.run_time += self.dt
+        self.target_time += self.tick_time
+        self.sleep_time = self.target_time - time.time()
+        if self.sleep_time > 0:
+            # Ahead of schedule: Sleep to maintain timing
+            time.sleep(self.sleep_time)
+        elif config.DEBUG and self.sleep_time < -self.tick_time * 0.1:
+            # Behind schedule: Report lag and skip sleep to catch up on next iteration
+            #print(f"[Control] Behind: {-self.sleep_time*1000:.1f}ms (catching up...)")
+            pass
