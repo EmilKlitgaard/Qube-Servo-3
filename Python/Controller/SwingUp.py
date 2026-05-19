@@ -39,8 +39,6 @@ class SwingUp:
     PHASE_WAIT_BOTTOM = 3         # Wait for alpha to reach target
     PHASE_RETURN_CENTER = 4       # Move back to center
     PHASE_EXIT = 5                # Ready to transition to stabilization
-
-    SWINGUP_SEQUENCE = 1
     
     def __init__(self, dt: float = config.CONTROL_DT):
         self.dt = dt
@@ -53,6 +51,20 @@ class SwingUp:
         self.down_threshold = 10
         self.target_theta = 10          # Target arm angle for swing-up phases (updated dynamically)
     
+
+    def energy_reached(self, alpha: float, alpha_dot: float) -> bool:
+            """Check if pendulum has reached target energy for swing-up."""
+            # Parameters 
+            mp = 0.024
+            lp = 0.129
+            g = 9.82
+            jp = (1/3) * mp * lp**2
+
+            mechanical_energy = 0.5 * jp * alpha_dot**2 + mp * g * (0.5 * lp * (1.0 - math.cos(alpha)))
+            target_energy = 2 * mp * g * lp
+            print(f"[SwingUp] Energy: {mechanical_energy:.4f} J, Target Energy: {target_energy:.4f} J")
+            return mechanical_energy >= target_energy
+
 
     def is_far_upright(self, alpha: float) -> bool:
         """Check if pendulum is near upright (within 10 degrees)."""
@@ -100,7 +112,7 @@ class SwingUp:
         
         voltage = 0.0
         
-        if self.SWINGUP_SEQUENCE == 0:
+        if config.CONTROL_SWINGUP_SEQUENCE == 0:
             match self.phase:
                 # Phase 0: Move arm to -90 degrees (-π/2 ≈ -1.571 rad)
                 case self.PHASE_INIT:
@@ -177,7 +189,7 @@ class SwingUp:
                         if self.is_down(alpha) and abs(alpha_dot) < self.alpha_dot_threshold:
                             self.phase = self.PHASE_INIT  # If not upright, go back to waiting for bottom
         
-        elif self.SWINGUP_SEQUENCE == 1:
+        elif config.CONTROL_SWINGUP_SEQUENCE == 1:
             match self.phase:
                 # Phase 0: Rapidly move arm to -10 degrees at max speed
                 case self.PHASE_INIT:
@@ -223,17 +235,17 @@ class SwingUp:
                         # Gently move toward target (Previus 2.0)
                         voltage = 10.0 * error
 
-        elif self.SWINGUP_SEQUENCE == 2:
+        elif config.CONTROL_SWINGUP_SEQUENCE == 2:
             # Parameters 
-            self.multiplier = 100
+            self.multiplier = 1000
             self.mp = 0.024
             self.lp = 0.129
             self.g = 9.82
             self.jp = (1/3) * self.mp * self.lp**2
 
             # Energy-based swing-up control
-            E = 0.5 * self.jp * alpha_dot**2 + self.mp * self.g * self.lp * (1.0 - math.cos(alpha-math.pi))
-            Er = 2.0 * self.mp * self.g * self.lp
+            E = 0.5 * self.jp * alpha_dot**2 + self.mp * self.g * (0.5 * self.lp * (1.0 - math.cos(alpha-math.pi)))
+            Er = 2* self.mp * self.g * self.lp
             print(f"[SwingUp] Energy: {E:.4f} J, Target Energy: {Er:.4f} J")
             s = alpha_dot * math.cos(alpha-math.pi)
             voltage = self.multiplier * (E - Er) * (-1.0 if s > 0.0 else 1.0)
@@ -241,7 +253,4 @@ class SwingUp:
         # Print info for debugging in degrees
         if config.DEBUG: print(f"[SwingUp] Phase: {self.phase}, theta: {math.degrees(theta):.1f}°, theta_dot: {math.degrees(theta_dot):.1f}°/s, alpha: {math.degrees(alpha):.1f}°, alpha_dot: {math.degrees(alpha_dot):.1f}°/s")
         
-        #self.theta_dot_lst = np.append(self.theta_dot_lst, math.degrees(theta_dot))
-        #print(np.mean(self.theta_dot_lst[-1000:]))  # Print average of last 100 theta_dot values for debugging
-        #voltage = 2.0
         return voltage

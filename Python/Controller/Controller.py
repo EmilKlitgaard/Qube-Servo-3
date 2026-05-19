@@ -26,11 +26,11 @@ class Controller:
     ----------
     dt : Control timestep [s].
     lqr_k : list of 4 floats
-        LQR feedback gains [k_theta, k_theta_dot, k_alpha, k_alpha_dot].
+        LQR feedback gains [k_alpha, k_alpha_dot, k_theta, k_theta_dot].
         Default corresponds to reasonable values for the Qube.
     """
 
-    def __init__(self, dt: float = 0.001, lqr_k: list = [3.0, 3.0, 60.0, 5.0]):
+    def __init__(self, dt: float = 0.001, lqr_k: list = [60.0, 5.0, 3.0, 3.0]):
         self.dt = dt
         self.k = lqr_k
         
@@ -72,11 +72,11 @@ class Controller:
         alpha_target_wrapped = math.atan2(math.sin(alpha_target), math.cos(alpha_target))
         
         # Compute errors relative to targets
-        theta_error = theta - theta_target
         alpha_error = alpha_wrapped - alpha_target_wrapped
+        theta_error = theta - theta_target
         
-        # State vector: [theta_error, theta_dot, alpha_error, alpha_dot]
-        state = [theta_error, theta_dot, alpha_error, alpha_dot]
+        # State vector: [alpha_error, alpha_dot, theta_error, theta_dot]
+        state = [alpha_error, alpha_dot, theta_error, theta_dot]
         
         # Compute control: Voltage = -K * state
         voltage = sum(k_i * state_i for k_i, state_i in zip(self.k, state))
@@ -108,11 +108,11 @@ class Controller:
         theta_error = theta - theta_target
     
         # PD control: u = -Kp * alpha_error - Kd * alpha_dot
-        # decent vals = 49, 5.0, 3, 3
-        Kp = 0.225  # Proportional gain for angle error
-        Kd = 0.015   # Derivative gain for angular velocity
-        Kp_theta = 0.01875  # Proportional gain for arm angle error
-        Kd_theta = 0.003  # Derivative gain for arm angular velocity  
+        # Optimal: 35.0, 1.0, 3.0, 0.5
+        Kp = 35.0  # Proportional gain for angle error
+        Kd = 1.0   # Derivative gain for angular velocity
+        Kp_theta = 3.0  # Proportional gain for arm angle error
+        Kd_theta = 0.5  # Derivative gain for arm angular velocity  
         torque = (Kp * alpha_error) + (Kd * alpha_dot) + (Kp_theta * theta_error) + (Kd_theta * theta_dot)  # Add arm stabilization terms
         voltage = self.torque_to_voltage(torque, theta_dot)
 
@@ -149,12 +149,16 @@ class Controller:
 
         if self.mode == "swingup":
             # Compute swing-up voltage
-            voltage = self.swingup.compute(theta, theta_dot, alpha, alpha_dot)
+            if not self.swingup.energy_reached(alpha, alpha_dot):
+                voltage = self.swingup.compute(theta, theta_dot, alpha, alpha_dot)
+            else:
+                if config.DEBUG: print("[Controller] Swing-up energy reached.")
+                voltage = 0.0  # No voltage needed when energy is sufficient, just switch to stabilize mode
 
             # Check if we are close enough to upright to switch to stabilization
-            #if self.swingup.is_far_upright(alpha):
-            #    if config.DEBUG: print("[Controller] Switching to stabilization mode.")
-            #    self.mode = "stabilize"
+            if self.swingup.is_far_upright(alpha):
+                if config.DEBUG: print("[Controller] Switching to stabilization mode.")
+                self.mode = "stabilize"
         else:
             # Compute stabilization voltage
             if config.CONTROL_MODERN_STABILIZATION:

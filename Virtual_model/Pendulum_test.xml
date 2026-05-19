@@ -10,6 +10,7 @@
     <material name="joint_mat" rgba="0.3 0.3 0.3 1"/>
     <material name="led" rgba="1.0 0.0 0.0 0.5"/>
     <material name="floor" rgba="1 1 1 1"/>
+    <material name="impact_target" rgba="0.0 1.0 0.0 1"/>
   </asset>
 
   <worldbody>
@@ -29,14 +30,62 @@
       <!-- Encode attatched to motor -->
       <body name="arm" pos="0 0 0">
         <geom type="cylinder" size="0.014" fromto="0.01925 0 0 -0.033 0 0" mass="0.0106" material="pendulum_mat"/>
-        <joint name="theta" type="hinge" pos="0 0 0" axis="0 0 1" limited="true" range="-1.5708 1.5708" damping="0.0"/>
+        <joint name="theta" type="hinge" pos="0 0 0" axis="0 0 1" limited="true" range="-1.5708 1.5708" damping="0.0001"/>
         
         <!-- Pendulum attached to encoder -->
         <body name="pendulum" pos="0.085 0 0">
           <geom type="capsule" size="0.00325" fromto="-0.118 0 0 0.0025 0 0" mass="0.095" material="arm_mat"/>
           <geom type="cylinder" size="0.00475" fromto="0 0 0.0075 0 0 -0.1215" mass="0.024" material="pendulum_mat"/>
-          <joint name="alpha" type="hinge" pos="0 0 0" axis="1 0 0" damping="0.0"/>
+          <joint name="alpha" type="hinge" pos="0 0 0" axis="1 0 0" damping="0.0001"/>
+          <geom
+            name="impact_target"
+            type="cylinder"
+            fromto="0 0 -0.1165 0 0 -0.1215"
+            size="0.005"
+            mass="0.000001"
+            material="impact_target"
+            contype="1"
+            conaffinity="1"
+            solref="0.001 1"
+            solimp="0.99 0.999 0.001"
+          />
         </body>
+      </body>
+    </body>
+
+    <!-- Disturbance pendulum for testing -->
+    <body name="disturbance_mount" pos="0.085 0 0.7445">
+      <!-- Hinge for striker pendulum -->
+      <joint
+          name="pendulum"
+          type="hinge"
+          axis="1 0 0"
+          damping="0.0001"
+      />
+      <!-- Weightless rod (~1g) -->
+      <geom
+          name="disturbance_rod"
+          type="cylinder"
+          fromto="0 0 0 0 0 -0.5"
+          size="0.003"
+          mass="0.000001"
+        
+          material="arm_mat"
+      />
+      <!-- 200g impact mass -->
+      <body name="disturbance_mass" pos="0 0 -0.5">
+          <geom
+              name="disturbance_capsule"
+              type="capsule"
+              size="0.025"
+              fromto="0.1 0 0 -0.1 0 0"
+              mass="0.2"
+              material="impact_target"
+              contype="1"
+              conaffinity="1"
+              solref="0.001 1"
+              solimp="0.99 0.999 0.001"
+          />
       </body>
     </body>
   </worldbody>
