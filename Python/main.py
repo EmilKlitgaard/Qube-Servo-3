@@ -56,7 +56,7 @@ def uart_loop(qube: QubeInterface, stop_event: threading.Event) -> None:
         print(f"[Thread] Error initializing UART: {e}")
 
         # ---------- TESTING MODE START ----------
-        # Skip test mode if GUI is enabled (to avoid stdin conflicts on macOS)
+        """# Skip test mode if GUI is enabled (to avoid stdin conflicts on macOS)
         if not config.GUI_ENABLED:
             import math
             import random
@@ -77,7 +77,7 @@ def uart_loop(qube: QubeInterface, stop_event: threading.Event) -> None:
             )
             thread.start()
         elif config.DEBUG:
-            print("[UART] GUI enabled: Skipping interactive test mode (use GUI controls instead)")
+            print("[UART] GUI enabled: Skipping interactive test mode (use GUI controls instead)")"""
         # ---------- TESTING MODE END ----------
 
     try:
@@ -107,7 +107,6 @@ def control_loop(qube: QubeInterface, logger, stop_event: threading.Event) -> No
     try:
         with qube:
             # Update GUI status when control starts
-            #if gui: gui.update_status(control_running=True, motor_enabled=False, mode="WAITING")
             run_controller(qube, logger, stop_event)
 
     except KeyboardInterrupt:
@@ -116,13 +115,11 @@ def control_loop(qube: QubeInterface, logger, stop_event: threading.Event) -> No
     except Exception as e:
         print(f"[Control] Error in control loop: {e}")
         if config.DEBUG:
-            
             import traceback
             traceback.print_exc()
     
     finally:
         # Update GUI status when control stops
-        #if gui: gui.update_status(control_running=False, motor_enabled=False, mode="WAITING")
         print("[Control] Control loop stopped")
 
 
@@ -164,23 +161,13 @@ def main():
     )
     uart_thread.start()
 
-    # Initialize control thread
-    if config.DEBUG: print("[Main] Initializing Control thread...")
-    controller_thread = threading.Thread(
-        target=control_loop,
-        args=(qube, logger, stop_event,),
-        name="ControlThread",
-        daemon=True
-    )
-    controller_thread.start()
-
     # Determine what to run in main thread based on config
     main_app = None
     try:
         if config.GUI_ENABLED and not config.QUBE_VISUALIZE:
             from interface import Dashboard
             main_app = Dashboard(qube, logger, stop_event)
-        elif config.QUBE_VISUALIZE and config.DATA_PLOTTING:
+        elif config.GUI_ENABLED and config.QUBE_VISUALIZE and config.DATA_PLOTTING:
             from interface import Graph
             main_app = Graph(qube, logger, stop_event)
 
@@ -190,17 +177,27 @@ def main():
         traceback.print_exc()
         main_app = None
 
-    # Run GUI on main thread (if enabled)
+    # Determine main thread (GUI or Control loop)
     try:
         # Start main app loop (GUI or Graph if enabled, otherwise just wait for stop event)
         if main_app is not None:
-            if config.DEBUG: print("[Main] Starting main app loop...")            
+            print("[Main] Starting main app loop...")            
             main_app.run()
+
+            # Initialize control loop in thread
+            print("[Main] Initializing Control loop as thread...")
+            controller_thread = threading.Thread(
+                target=control_loop,
+                args=(qube, logger, stop_event,),
+                name="ControlThread",
+                daemon=True
+            )
+            controller_thread.start()
         else:
-            # Wait until stop_event is set
-            if config.DEBUG: print("[Main] GUI disabled or running in simulation: Waiting for stop event...")
-            while not stop_event.is_set():
-                time.sleep(0.1)
+            # Start control loop in main thread if no GUI (for simulation or headless mode)
+            print("[Main] GUI disabled or running in simulation. Running control loop in main thread...")
+            controller_thread = None
+            control_loop(qube, logger, stop_event)  # Run control loop in main thread if no GUI (for simulation or headless mode)
 
     except Exception as e:
         print(f"[Main] Error in main loop: {e}")
@@ -224,7 +221,7 @@ def main():
                 if config.DEBUG: print("[Thread] UART thread terminated successfully.")
         
         # Gracefully terminate Control thread
-        if controller_thread.is_alive():
+        if controller_thread is not None and controller_thread.is_alive():
             if config.DEBUG: print("[Thread] Waiting for control thread to terminate...")
             controller_thread.join(timeout=timeout)
             if controller_thread.is_alive():

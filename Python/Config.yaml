@@ -14,7 +14,7 @@ UART:
   BAUDRATE: 230400
 
 QUBE:
-  SIMULATION: false              # Whether to use MuJoCo simulation (true) or real hardware (false)
+  SIMULATION: true              # Whether to use MuJoCo simulation (true) or real hardware (false)
   VISUALIZE: true                # Whether to launch MuJoCo viewer (only applies if SIMULATION is true)
   SIMULATION_SPEED: 1.0          # 1.0 = real time, 0.5 = half speed
 
@@ -40,5 +40,5 @@ PLANT:
   GRAVITY: 9.816                # Gravitational acceleration [m/s^2]
 
 DATA:
-  LOGGING: true                 # Whether to log data for plotting
-  PLOTTING: true                # Whether to enable plotting after simulation (Requires LOGGING to be true)
+  LOGGING: false                 # Whether to log data for plotting
+  PLOTTING: false                # Whether to enable plotting after simulation (Requires LOGGING to be true)
