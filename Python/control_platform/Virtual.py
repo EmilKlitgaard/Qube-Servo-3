@@ -27,7 +27,7 @@ import numpy as np
 
 from Config import config
 from typing import Tuple, Optional
-from control_platform import QubeInterface
+from .QubeInterface import QubeInterface
 
 # ── Model file path ────────────────────────────────────────────────────────────
 def get_model_file_path() -> str:

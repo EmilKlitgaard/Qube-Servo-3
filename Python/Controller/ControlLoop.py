@@ -17,9 +17,9 @@ import math
 import threading
 
 from Config import config
-from controller import Controller
-from control_platform import QubeInterface
-from data import Logger
+from controller.Controller import Controller
+from control_platform.QubeInterface import QubeInterface
+from data.Logging import Logger
 
 
 def update_led(theta: float, theta_dot: float, alpha: float, alpha_dot: float, mode: str, iteration: int, qube: QubeInterface) -> None:

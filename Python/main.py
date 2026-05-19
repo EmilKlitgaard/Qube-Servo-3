@@ -5,9 +5,14 @@ import time
 import threading
 
 from Config import config
-from controller import run_controller
 from tiva_microcontroller.UART import UART
-from control_platform import QubeInterface, Physical, Virtual
+from control_platform.QubeInterface import QubeInterface
+from control_platform.Physical import Physical
+
+if config.QUBE_SIMULATION:
+    from control_platform.Virtual import Virtual
+
+from controller.ControlLoop import run_controller
 
 
 # ╔═══════════════════════════════════════════════════╗
@@ -148,7 +153,7 @@ def main():
     # Setup data logger (plotter created inside app)
     logger = None
     if config.DATA_LOGGING:
-        from data import Logger
+        from data.Logging import Logger
         logger = Logger()
 
     # Initialize UART thread
