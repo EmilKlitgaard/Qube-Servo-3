@@ -38,6 +38,12 @@ class QubeInterface(ABC):
         self.led_g = 0.0
         self.led_b = 0.0
 
+        # Timing variables for real-time control
+        self.dt = dt
+        self.run_time = 0.0
+        self.tick_time = self.dt / config.QUBE_SIMULATION_SPEED
+        self.target_time = time.time()   # Target time for next step (enables catch-up if falling behind)
+
         # Flag for starting control loop (used in GUI mode to wait for user input)
         self.loop_running = False
 

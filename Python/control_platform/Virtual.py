@@ -78,12 +78,6 @@ class Virtual(QubeInterface):
         self.startup_theta = 0.0
         self.startup_alpha = 0.0
 
-        # Timing variables for real-time control
-        self.dt = dt
-        self.run_time = 0.0
-        self.tick_time = self.dt / config.QUBE_SIMULATION_SPEED
-        self.target_time = time.time()   # Target time for next step (enables catch-up if falling behind)
-
         # Define constants:
         self.emf_constant = config.PLANT_MOTOR_CONSTANT         # Back EMF constant [V/(rad/s)]
         self.torque_constant = config.PLANT_MOTOR_CONSTANT      # Torque constant [Nm/V]
@@ -274,7 +268,7 @@ class Virtual(QubeInterface):
             alpha %= (math.radians(360))
             mechanical_energy = 0.5 * jp * alpha_dot**2 + mp * g * (0.5 * lp * (1.0 - math.cos(alpha)))
             target_energy = mp * g * lp
-            print(f"[SwingUp] Energy: {mechanical_energy:.4f} J, Target Energy: {target_energy:.4f} J")
+            if config.DEBUG: print(f"[SwingUp] Energy: {mechanical_energy:.4f} J, Target Energy: {target_energy:.4f} J")
             return mechanical_energy >= target_energy
         
         """

@@ -62,7 +62,7 @@ class SwingUp:
 
             mechanical_energy = 0.5 * jp * alpha_dot**2 + mp * g * (0.5 * lp * (1.0 - math.cos(alpha)))
             target_energy = 2 * mp * g * lp
-            print(f"[SwingUp] Energy: {mechanical_energy:.4f} J, Target Energy: {target_energy:.4f} J")
+            if config.DEBUG: print(f"[SwingUp] Energy: {mechanical_energy:.4f} J, Target Energy: {target_energy:.4f} J")
             return mechanical_energy >= target_energy
 
 
@@ -246,7 +246,7 @@ class SwingUp:
             # Energy-based swing-up control
             E = 0.5 * self.jp * alpha_dot**2 + self.mp * self.g * (0.5 * self.lp * (1.0 - math.cos(alpha-math.pi)))
             Er = 2* self.mp * self.g * self.lp
-            print(f"[SwingUp] Energy: {E:.4f} J, Target Energy: {Er:.4f} J")
+            if config.DEBUG: print(f"[SwingUp] Energy: {E:.4f} J, Target Energy: {Er:.4f} J")
             s = alpha_dot * math.cos(alpha-math.pi)
             voltage = self.multiplier * (E - Er) * (-1.0 if s > 0.0 else 1.0)
     

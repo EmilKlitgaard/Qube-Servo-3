@@ -1,4 +1,4 @@
-DEBUG: true                     # Whether to enable debug mode (prints additional information)
+DEBUG: false                     # Whether to enable debug mode (prints additional information)
 ENERGY_TEST: false              # Whether to perform energy test during swing-up (only applies if DEBUG is true)
 
 PENDULUM_TEST: 
@@ -6,22 +6,22 @@ PENDULUM_TEST:
   START_ANGLE: 45               # Starting angle for pendulum test in degrees (only applies if PENDULUM_TEST is true)
 
 GUI:
-  ENABLED: true                 # Whether to enable the GUI (Only applies if VISUALIZE is false)
+  ENABLED: false                 # Whether to enable the GUI (Only applies if VISUALIZE is false)
   UPDATE_RATE: 100              # GUI update rate in Hz (only applies if ENABLED is true)
 
 UART:
-  PORT: COM4
+  PORT: COM3
   BAUDRATE: 230400
 
 QUBE:
-  SIMULATION: true              # Whether to use MuJoCo simulation (true) or real hardware (false)
+  SIMULATION: false              # Whether to use MuJoCo simulation (true) or real hardware (false)
   VISUALIZE: true                # Whether to launch MuJoCo viewer (only applies if SIMULATION is true)
   SIMULATION_SPEED: 1.0          # 1.0 = real time, 0.5 = half speed
 
 CONTROL:
   DT: 0.001                     # Control timestep [s] (1 kHz)
   DURATION: null                # Maximum simulation duration [s], set to null for unlimited
-  MODERN_STABILIZATION: true    # Use modern stabilization method (true) or traditional method (false)
+  MODERN_STABILIZATION: false    # Use modern stabilization method (true) or traditional method (false)
   SWINGUP_SEQUENCE: 1           # Swing-up sequence to use (0, 1 or 2) 
   
   # Voltage limits
