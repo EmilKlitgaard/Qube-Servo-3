@@ -65,29 +65,82 @@ If later you enable GUI or logging, add those back deliberately rather than bund
 
 ## Recommended Nuitka Command
 
+### Install Nuitka on Windows
+
+Use the Windows Python launcher if it is available:
+
+```powershell
+py -m pip install --upgrade pip
+py -m pip install nuitka
+```
+
+If you are using an activated virtual environment, this also works:
+
+```powershell
+python -m pip install --upgrade pip
+python -m pip install nuitka
+```
+
+### Important: Windows line continuation
+
+The backslash character `\` is **not** a line-continuation character in PowerShell or `cmd.exe`. That is why `--standalone \` produces the error about a missing expression after `--`.
+
+Use one of these instead:
+
+- PowerShell continuation: backtick `` ` ``
+- `cmd.exe` continuation: caret `^`
+- Easiest option: keep the command on one line
+
 ### Minimal physical build
 
 Use this if you want the smallest deployment surface and you are keeping the current config values:
 
-```bash
-python -m nuitka \
-  --standalone \
-  --onefile \
-  --assume-yes-for-downloads \
-  --output-dir=build \
+PowerShell:
+
+```powershell
+py -m nuitka `
+  --standalone `
+  --onefile `
+  --assume-yes-for-downloads `
+  --output-dir=build `
   Python/main.py
+```
+
+cmd.exe:
+
+```bat
+py -m nuitka ^
+  --standalone ^
+  --onefile ^
+  --assume-yes-for-downloads ^
+  --output-dir=build ^
+  Python/main.py
+```
+
+Single line:
+
+```bash
+py -m nuitka --standalone --onefile --assume-yes-for-downloads --output-dir=build Python/main.py
 ```
 
 ### If you want to pin the config file explicitly
 
-```bash
-python -m nuitka \
-  --standalone \
-  --onefile \
-  --assume-yes-for-downloads \
-  --output-dir=build \
-  --include-data-file=Python/Config.yaml=Config.yaml \
+PowerShell:
+
+```powershell
+py -m nuitka `
+  --standalone `
+  --onefile `
+  --assume-yes-for-downloads `
+  --output-dir=build `
+  --include-data-file=Python/Config.yaml=Config.yaml `
   Python/main.py
+```
+
+Single line:
+
+```bash
+py -m nuitka --standalone --onefile --assume-yes-for-downloads --output-dir=build --include-data-file=Python/Config.yaml=Config.yaml Python/main.py
 ```
 
 ## Recommended Packaging Rules
