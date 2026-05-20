@@ -1,11 +1,30 @@
 from qube import qube
 from controller import controller
+from log import log_recovery
 
 import time
 import math
 
-T = 0.002
-settle_hold = 0.5
+def on_target(theta, alpha, theta_dot, alpha_dot):
+    # Define thresholds for being "on target"
+    theta_target = 0.0
+    alpha_target = math.pi
+    target_threshold = math.radians(10)     # 10 degrees
+    alpha_dot_threshold = math.radians(10)  # 10 degrees/s
+    
+    # Small helper: shortest signed angular difference
+    def angle_diff(a, b):
+        return (a - b + math.pi) % (2.0 * math.pi) - math.pi
+
+    # Check if theta and alpha are within thresholds of target (accounting for wrap)
+    theta_on_target = abs(angle_diff(theta, theta_target)) < target_threshold
+    alpha_on_target = abs(angle_diff(alpha, alpha_target)) < target_threshold
+
+    # Check if angular velocities are low (near stationary)
+    theta_dot_on_target = abs(theta_dot) < alpha_dot_threshold
+    alpha_dot_on_target = abs(alpha_dot) < alpha_dot_threshold
+
+    return theta_on_target and alpha_on_target and theta_dot_on_target and alpha_dot_on_target
 
 
 if __name__ == "__main__":
@@ -21,7 +40,6 @@ if __name__ == "__main__":
 
     try:
         while True:
-
             start = time.perf_counter()
 
             theta, alpha, theta_dot, alpha_dot = q.read()
@@ -31,11 +49,8 @@ if __name__ == "__main__":
             near_upright = abs(abs(a_wrapped) - math.pi) <= balance_angle
 
             if near_upright:
-
                 V = ctrl.classic_pd( theta,alpha,theta_dot,alpha_dot)
                 #V = ctrl.LQR(theta, alpha, theta_dot,alpha_dot)
-
-            
 
                 now = time.perf_counter()
 
@@ -43,30 +58,25 @@ if __name__ == "__main__":
                     stable_since = now
 
                 if recovery_active:
-                    if now - stable_since >= settle_hold:
+                    if on_target(theta, alpha, theta_dot, alpha_dot):
                         recovery_time = now - recovery_start
-
-                        print(
-                            f"Recovered and stabilized in "
-                            f"{recovery_time:.3f} s"
-                        )
-
                         recovery_active = False
                         recovery_start = None
                         stable_since = None
                         ready_for_knockdown = True
+                        print(f"Recovered and stabilized in {recovery_time:.3f}s")
+                        try:
+                            idx = log_recovery(recovery_time)
+                            print(f"Logged recovery as #{idx}")
+                        except Exception as e:
+                            print(f"Failed to log recovery: {e}")
 
                 elif not ready_for_knockdown:
-                    if now - stable_since >= settle_hold:
+                    if on_target(theta, alpha, theta_dot, alpha_dot):
                         ready_for_knockdown = True
-
-                        print(
-                            "Pendulum stabilized. "
-                            "Push it to time the next recovery."
-                        )
+                        print("Pendulum stabilized. Push it to time the next recovery.")
 
             else:
-
                 stable_since = None
 
                 V = ctrl.swing_up(
@@ -79,18 +89,9 @@ if __name__ == "__main__":
                 if ready_for_knockdown and not recovery_active:
                     recovery_active = True
                     recovery_start = time.perf_counter()
-
                     print("Pendulum knocked down. Timing recovery...")
 
             q.write(V)
-
-            elapsed = time.perf_counter() - start
-            remaining = T - elapsed
-
-            if remaining > 0:
-                time.sleep(remaining)
-            else:
-                print("Loop overran")
 
     except KeyboardInterrupt:
         pass

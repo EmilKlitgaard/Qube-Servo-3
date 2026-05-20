@@ -6,18 +6,18 @@ class controller:
         # PD gains
         
         #model
-        self.Kp_alpha = 37.3
-        self.Kd_alpha = 4.0
+        #self.Kp_alpha = 37.3
+        #self.Kd_alpha = 4.0
         
-        self.Kp_theta = 3.0
-        self.Kd_theta = 0.5
-        
-        #tuned
-        #self.Kp_alpha = 35.0
-        #self.Kd_alpha = 1
-
         #self.Kp_theta = 3.0
         #self.Kd_theta = 0.5
+        
+        #tuned
+        self.Kp_alpha = 35.0
+        self.Kd_alpha = 1
+
+        self.Kp_theta = 3.0
+        self.Kd_theta = 0.5
 
         self.max_voltage = 10.0
         

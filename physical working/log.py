@@ -1,192 +1,70 @@
 import math
 import csv
 from datetime import datetime
-from time import sleep
+"""Simple recovery logger: record stabilization times persistently.
+
+This module only provides a lightweight CSV logger that appends a
+monotonic sample index, timestamp and recovery time (seconds). It
+continues the sample index across runs by reading the last line of
+the CSV if it exists.
+"""
+
+from datetime import datetime
+import csv
+import os
 
 
-class StepMetrics:
+class RecoveryLogger:
+    def __init__(self, filename="recovery_times.csv"):
+        self.filename = filename
+        self.next_index = 1
 
-    def __init__(
-        self,
-        tol=0.05,
-        settle_hold=0.5,
-        loop_count_max = 999
-    ):
-        
-
-        self.tol = tol
-        self.settle_hold = settle_hold
-        self.loop_count = 0
-        self.loop_count_max = loop_count_max
-
-        # Create unique filename for each run
-        timestamp = datetime.now().strftime(
-            "%Y%m%d_%H%M%S"
-        )
-
-        self.filename = f"metrics_{timestamp}.csv"
-
-        self._create_file()
-
-        self.reset()
-
-    def _create_file(self):
-
-        with open(self.filename, "w", newline="") as file:
-
-            writer = csv.writer(file)
-
-            writer.writerow([
-                "timestamp",
-                "rise_time_s",
-                "settling_time_s",
-                "overshoot_percent",
-                "overshoot_deg"
-            ])
-
-        print(f"Logging metrics to: {self.filename}")
-
-    def reset(self):
-
-        self.active = False
-
-        self.t0 = None
-        self.initial_error = None
-
-        self.peak_opposite_error = 0.0
-
-        self.rise_time = None
-        self.settling_time = None
-
-        self.in_band_since = None
-
-    def start(self, t, error):
-
-        self.reset()
-
-        self.active = True
-
-        self.t0 = t
-        self.initial_error = error
-
-        print("\nBalance metrics started")
-
-    def stop(self):
-
-        if self.active:
-            print("Exited balance mode")
-
-        self.active = False
-
-    def log_to_file(
-        self,
-        rise_time,
-        settling_time,
-        overshoot_percent,
-        overshoot_deg
-    ):
-
-        timestamp = datetime.now().strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
-
-        with open(self.filename, "a", newline="") as file:
-
-            writer = csv.writer(file)
-
-            writer.writerow([
-                timestamp,
-                f"{rise_time:.4f}",
-                f"{settling_time:.4f}",
-                f"{overshoot_percent:.2f}",
-                f"{overshoot_deg:.2f}"
-            ])
-
-    def update(self, t, error):
-
-        if not self.active:
-            return
-
-        elapsed = t - self.t0
-
-        e0 = abs(self.initial_error)
-
-        # Rise time
-        if (
-            self.rise_time is None
-            and e0 > 1e-6
-            and abs(error) <= 0.1 * e0
-        ):
-
-            self.rise_time = elapsed
-
-            print(
-                f"Rise time: "
-                f"{self.rise_time:.3f} s"
-            )
-
-        # Overshoot
-        if error * self.initial_error < 0:
-
-            self.peak_opposite_error = max(
-                self.peak_opposite_error,
-                abs(error)
-            )
-
-        # Settling time
-        if abs(error) <= self.tol:
-
-            if self.in_band_since is None:
-
-                self.in_band_since = elapsed
-
-            elif (
-                self.settling_time is None
-                and elapsed - self.in_band_since >= self.settle_hold
-            ):
-
-                self.settling_time = self.in_band_since
-
-                if e0 > 1e-6:
-
-                    overshoot_percent = (
-                        self.peak_opposite_error / e0
-                    ) * 100.0
-
-                else:
-
-                    overshoot_percent = 0.0
-
-                overshoot_deg = math.degrees(
-                    self.peak_opposite_error
-                )
-
-                print(
-                    f"Settling time: "
-                    f"{self.settling_time:.3f} s"
-                )
-
-                print(
-                    f"Overshoot: "
-                    f"{overshoot_percent:.2f}% "
-                    f"({overshoot_deg:.2f} deg)"
-                )
-
-                self.log_to_file(
-                    self.rise_time,
-                    self.settling_time,
-                    overshoot_percent,
-                    overshoot_deg
-                )
-                
-                
-                self.loop_count += 1
-                if self.loop_count >= self.loop_count_max:
-                    print("Balance metrics completed")
-                    sleep(999)
-                return True
-
+        if os.path.exists(self.filename):
+            try:
+                with open(self.filename, "r", newline="") as f:
+                    # find last non-empty line
+                    last = None
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            last = line
+                    if last and not last.startswith("index"):
+                        parts = last.split(",")
+                        try:
+                            self.next_index = int(parts[0]) + 1
+                        except Exception:
+                            self.next_index = 1
+            except Exception:
+                self.next_index = 1
         else:
+            # create file with header
+            with open(self.filename, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(["index", "timestamp", "recovery_time_s"])
 
-            self.in_band_since = None
-            return False
+    def log(self, recovery_time_s):
+        """Append a recovery time (seconds) to the CSV and flush.
+
+        Returns the written index.
+        """
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        idx = self.next_index
+        with open(self.filename, "a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([idx, timestamp, f"{recovery_time_s:.6f}"])
+            f.flush()
+
+        self.next_index += 1
+        return idx
+
+
+# module-level logger and convenience function
+_logger = RecoveryLogger()
+
+
+def log_recovery(recovery_time_s):
+    """Log a recovery time in seconds and return the sample index."""
+    return _logger.log(recovery_time_s)
+
+
+__all__ = ["log_recovery", "RecoveryLogger"]
