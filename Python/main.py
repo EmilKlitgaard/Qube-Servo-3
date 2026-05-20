@@ -6,44 +6,8 @@ import threading
 
 from Config import config
 from tiva_microcontroller.UART import UART
-from control_platform.QubeInterface import QubeInterface
-from control_platform.Physical import Physical
-
-if config.QUBE_SIMULATION:
-    from control_platform.Virtual import Virtual
-
+from control_platform.Qube import Qube
 from controller.ControlLoop import run_controller
-
-
-# ╔═══════════════════════════════════════════════════╗
-# ║                  HELPER FUNCTIONS                 ║
-# ╚═══════════════════════════════════════════════════╝
-
-def validate_environment():
-    # ── Check if we need mjpython for MuJoCo viewer ──
-    if config.QUBE_SIMULATION and config.QUBE_VISUALIZE:
-        import os
-        
-        # Check if we're already running under mjpython (via environment variable)
-        is_mjpython = os.environ.get("MJPYTHON_LAUNCHER", "false").lower() == "true"
-        
-        if not is_mjpython:
-            import sys
-            import subprocess
-
-            if config.DEBUG: print("[Main] MuJoCo visualization enabled: Relaunching with mjpython...\n")
-
-            # Relaunch this script with mjpython, setting environment variable
-            env = os.environ.copy()
-            env["MJPYTHON_LAUNCHER"] = "true"
-
-            try:
-                result = subprocess.run(['mjpython', __file__], env=env, check=False)
-                sys.exit(result.returncode)
-
-            except FileNotFoundError:
-                print("[Main] ERROR: mjpython not found. Install MuJoCo or disable QUBE_VISUALIZE in Config.yaml")
-                sys.exit(1)
 
 
 # ╔═══════════════════════════════════════════════════╗
@@ -51,61 +15,23 @@ def validate_environment():
 # ╚═══════════════════════════════════════════════════╝
 
 # ── UART Thread ────────────────────────────────────────────────────────────
-def uart_loop(qube: QubeInterface, stop_event: threading.Event) -> None:
+def uart_loop(qube: Qube, stop_event: threading.Event) -> None:
     print("[Thread] started new thread:", threading.current_thread().name)
 
-    uart = None
     try:
         uart = UART(config.UART_PORT, config.UART_BAUDRATE)
+        uart.loop(qube, stop_event)
+        uart.close()
+
     except Exception as e:
         print(f"[Thread] Error initializing UART: {e}")
-
-        # ---------- TESTING MODE START ----------
-        """# Skip test mode if GUI is enabled (to avoid stdin conflicts on macOS)
-        if not config.GUI_ENABLED:
-            import math
-            import random
-            
-            def test_thread_func():
-                time.sleep(10)
-                while not stop_event.is_set():
-                    input("\nPress ENTER to set a new random theta target...\n")
-                    target_theta = math.radians(random.uniform(-45, 45))
-                    qube.set_target(target_theta, 0.0)
-                    if config.DEBUG: print(f"[Test] Setting theta target to {math.degrees(target_theta):.1f}°")
-                    time.sleep(0.1)
-            
-            thread = threading.Thread(
-                target=test_thread_func,
-                name="TestThread",
-                daemon=True
-            )
-            thread.start()
-        elif config.DEBUG:
-            print("[UART] GUI enabled: Skipping interactive test mode (use GUI controls instead)")"""
-        # ---------- TESTING MODE END ----------
-
-    try:
-        if uart is not None:
-            print("[UART] UART thread running. Listening for incoming data...")
-            uart.loop(qube, stop_event)
-
-    except Exception as e:
-        print(f"[Thread] Error in UART loop: {e}")
-        if config.DEBUG:
-            import traceback
-            traceback.print_exc()
-
-    finally:
-        # Cleanup
-        if uart is not None:
-            uart.close()
     
-    print("[Thread] UART stopped")
+    finally:
+        print("[Thread] UART stopped")
 
 
 # ── Control Thread ────────────────────────────────────────────────────────────
-def control_loop(qube: QubeInterface, logger, stop_event: threading.Event) -> None:
+def control_loop(qube: Qube, logger, stop_event: threading.Event) -> None:
     print("[Thread] started new thread:", threading.current_thread().name)
 
     # Run control loop (will block until completion or interruption)
@@ -136,24 +62,16 @@ def control_loop(qube: QubeInterface, logger, stop_event: threading.Event) -> No
 def main():
     print("[Main] Starting on main thread:", threading.current_thread().name)
 
-    # Validate environment to handle MuJoCo viewer (if needed)
-    validate_environment()
-
     # Event to signal threads to stop
     stop_event = threading.Event()
 
-    # Set up QUBE-Servo 3 interface (physical or virtual) based on config
-    if config.QUBE_SIMULATION:
-        if config.DEBUG: print("[Control] Using Virtual QUBE-Servo 3 (simulation)")
-        qube = Virtual()
-    else:
-        if config.DEBUG: print("[Control] Using Physical QUBE-Servo 3 (hardware)")
-        qube = Physical()
+    # Initialize QUBE
+    qube = Qube()
 
     # Setup data logger (plotter created inside app)
     logger = None
     if config.DATA_LOGGING:
-        from data.Logging import Logger
+        from data.Log import Logger
         logger = Logger()
 
     # Initialize UART thread
@@ -167,22 +85,15 @@ def main():
     uart_thread.start()
 
     # Determine what to run in main thread based on config
-    main_app = None
-    try:
-        if config.GUI_ENABLED and not config.QUBE_VISUALIZE:
-            from interface import Dashboard
-            main_app = Dashboard(qube, logger, stop_event)
-        elif config.GUI_ENABLED and config.QUBE_VISUALIZE and config.DATA_PLOTTING:
-            from interface import Graph
-            main_app = Graph(qube, logger, stop_event)
+    if config.GUI_ENABLED and config.DATA_PLOTTING:
+        from interface import Graph
+        main_app = Graph(qube, logger, stop_event)
+    elif config.GUI_ENABLED:
+        from interface import Dashboard
+        main_app = Dashboard(qube, logger, stop_event)
+    else:
+        main_app = None # No GUI, run control loop in main thread
 
-    except Exception as e:
-        print(f"[Main] Error initializing main app: {e}")
-        import traceback
-        traceback.print_exc()
-        main_app = None
-
-    # Determine main thread (GUI or Control loop)
     try:
         # Start main app loop (GUI or Graph if enabled, otherwise just wait for stop event)
         if main_app is not None:
@@ -201,8 +112,8 @@ def main():
         else:
             # Start control loop in main thread if no GUI (for simulation or headless mode)
             print("[Main] GUI disabled or running in simulation. Running control loop in main thread...")
+            control_loop(qube, logger, stop_event)
             controller_thread = None
-            control_loop(qube, logger, stop_event)  # Run control loop in main thread if no GUI (for simulation or headless mode)
 
     except Exception as e:
         print(f"[Main] Error in main loop: {e}")

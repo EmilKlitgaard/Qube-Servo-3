@@ -12,17 +12,16 @@ Example usage:
         run_controller(qube, duration=30.0)
 """
 
-import time
 import math
 import threading
 
 from Config import config
 from controller.Controller import Controller
-from control_platform.QubeInterface import QubeInterface
-from data.Logging import Logger
+from control_platform.Qube import Qube
+from data.Log import Logger
 
 
-def update_led(theta: float, theta_dot: float, alpha: float, alpha_dot: float, mode: str, iteration: int, qube: QubeInterface) -> None:
+def update_led(theta: float, theta_dot: float, alpha: float, alpha_dot: float, mode: str, iteration: int, qube: Qube) -> None:
     """ Update the RGB LED based on the current mode and state. """
     # LED feedback based on mode
     if mode == "swingup":
@@ -71,16 +70,9 @@ def on_target(theta: float, theta_dot: float, alpha: float, alpha_dot: float, th
     return theta_on_target and alpha_on_target and theta_dot_on_target and alpha_dot_on_target
 
 
-def run_controller(qube: QubeInterface, logger: Logger, stop_event: threading.Event, duration: float = None) -> None:
+def run_controller(qube: Qube, logger: Logger, stop_event: threading.Event, duration: float = None) -> None:
     """
     Run the main control loop for the Qube-Servo 3.
-    
-    Stabilizes the pendulum upright (alpha = 0) and centers the arm (theta = 0).
-    Uses a combined swing-up + LQR stabilization controller.
-    
-    The simulation speed is controlled via config.QUBE_SIMULATION_SPEED:
-    - 1.0 = real-time (each physics step takes dt seconds in wall-clock time)
-    - 0.5 = half speed (each physics step takes 2*dt seconds in wall-clock time)
     
     Parameters
     ----------
@@ -92,27 +84,7 @@ def run_controller(qube: QubeInterface, logger: Logger, stop_event: threading.Ev
     
     # Initialize controller
     controller = Controller()
-    if config.DEBUG:
-        print("[Control] Starting control loop...")
-        print(f"[Control] Physics timestep: {controller.dt * 1000:.1f} ms")
-        print(f"[Control] Simulation speed: {config.QUBE_SIMULATION_SPEED}x")
-        print(f"[Control] Timestep: {controller.dt * 1000 / config.QUBE_SIMULATION_SPEED:.1f} ms")
-        print(f"[Control] Duration: {duration if duration is not None else 'unlimited'} s")
-
-    # Initialize visualizer if enabled (only for Virtual simulator)
-    viewer = None
-    if config.QUBE_SIMULATION and config.QUBE_VISUALIZE:
-        try:
-            import mujoco.viewer
-            if config.DEBUG: print("[Control] Launching MuJoCo viewer...")
-            # Launch passive viewer with model and data from qube
-            viewer = mujoco.viewer.launch_passive(qube.model, qube.data)
-            qube.viewer = viewer
-            if config.DEBUG: print("[Control] Viewer launched.\n")
-        except Exception as e:
-            print(f"[Control] Warning: Could not launch viewer: {e}")
-            print(f"[Control] On macOS, ensure you run via 'mjpython' launcher.\n")
-            viewer = None
+    if config.DEBUG: print("[Control] Starting control loop...")
 
     # Await for start signal to begin control loop
     qube.await_start()
@@ -126,11 +98,6 @@ def run_controller(qube: QubeInterface, logger: Logger, stop_event: threading.Ev
             # Check exit condition
             if duration is not None and qube.run_time > duration:
                 if config.DEBUG: print(f"[Control] Duration of {duration} s reached. Exiting control loop.")
-                break
-
-            # Check if viewer is still running
-            if viewer is not None and not viewer.is_running():
-                if config.DEBUG: print("[Control] Viewer window closed.")
                 break
             
             # Print round time for debugging
@@ -176,10 +143,6 @@ def run_controller(qube: QubeInterface, logger: Logger, stop_event: threading.Ev
         if config.DEBUG: print("\n[Control] Interrupted by user (Ctrl+C)")
     
     finally:
-        # Close viewer if active
-        if viewer is not None:
-            viewer.close()
-
         # Stop all threads and signal shutdown
         stop_event.set()
         

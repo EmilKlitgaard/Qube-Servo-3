@@ -5,7 +5,7 @@ import matplotlib.animation as animation
 import matplotlib.gridspec as gridspec
 
 from Config import config
-from .Logging import Logger
+from .Log import Logger
 
 
 # ── 2D Plotter with Live Animation ──────────────────────────────────────

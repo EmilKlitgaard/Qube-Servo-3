@@ -6,8 +6,9 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from Config import config
-from data import Logger, Plotter
-from control_platform import QubeInterface
+from data.Log import Logger
+from interface.Plot import Plotter
+from control_platform.Qube import Qube
 
 
 class AppInterface(ctk.CTk, ABC):
@@ -18,7 +19,7 @@ class AppInterface(ctk.CTk, ABC):
     to avoid conflicts with MuJoCo viewer during simulation.
     """
     
-    def __init__(self, qube: QubeInterface, logger: Logger, stop_event: threading.Event):        
+    def __init__(self, qube: Qube, logger: Logger, stop_event: threading.Event):        
         self.qube = qube
         self.logger = logger
         self.stop_event = stop_event

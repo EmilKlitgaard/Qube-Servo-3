@@ -52,6 +52,10 @@ Build on the same OS that will run the executable. For this project, that means 
 - Python venv activated
 - the same runtime dependencies that the script uses
 
+### macOS note
+
+macOS is fine for development, dependency checks, and build experiments, but it is **not** the target runtime for the physical Quanser release. The hardware backend is Windows/Linux only, so any macOS build should be treated as a development or packaging check, not the production binary.
+
 ### 3. Freeze only what the physical build needs
 
 For the current config, the release should exclude:
@@ -79,6 +83,23 @@ If you are using an activated virtual environment, this also works:
 ```powershell
 python -m pip install --upgrade pip
 python -m pip install nuitka
+```
+
+### Install Nuitka on macOS
+
+If you are using the local macOS venv, activate it first:
+
+```bash
+source ~/qube_venv/bin/activate
+python3 -m pip install --upgrade pip
+python3 -m pip install nuitka
+```
+
+If you prefer to install into the active interpreter without activating a venv:
+
+```bash
+python3 -m pip install --upgrade pip
+python3 -m pip install nuitka
 ```
 
 ### Important: Windows line continuation
@@ -123,6 +144,17 @@ Single line:
 py -m nuitka --standalone --onefile --assume-yes-for-downloads --output-dir=build Python/main.py
 ```
 
+### macOS development build
+
+Use this only for development checks on macOS. It is not a physical release build.
+
+```bash
+source ~/qube_venv/bin/activate
+python3 -m nuitka --standalone --onefile --assume-yes-for-downloads --output-dir=build Python/main.py
+```
+
+If your macOS environment does not have all optional GUI/simulation dependencies installed, keep the build physical-only in practice by running the current config and avoiding the simulator branches.
+
 ### If you want to pin the config file explicitly
 
 PowerShell:
@@ -141,6 +173,13 @@ Single line:
 
 ```bash
 py -m nuitka --standalone --onefile --assume-yes-for-downloads --output-dir=build --include-data-file=Python/Config.yaml=Config.yaml Python/main.py
+```
+
+### macOS development build with config file
+
+```bash
+source ~/qube_venv/bin/activate
+python3 -m nuitka --standalone --onefile --assume-yes-for-downloads --output-dir=build --include-data-file=Python/Config.yaml=Config.yaml Python/main.py
 ```
 
 ## Recommended Packaging Rules
