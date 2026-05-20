@@ -84,7 +84,7 @@ class QubeInterface(ABC):
                 if config.DEBUG: print("[QubeInterface] Waiting for GUI start command...")
                 time.sleep(0.1)
         else:
-            input("\nPress ENTER to start control loop...")
+            input("\nPress ENTER to start control loop...\n")
 
         # Initialize hardware
         self.reset()

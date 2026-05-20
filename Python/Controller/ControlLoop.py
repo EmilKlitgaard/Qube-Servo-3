@@ -105,8 +105,9 @@ def run_controller(qube: QubeInterface, logger: Logger, stop_event: threading.Ev
         try:
             import mujoco.viewer
             if config.DEBUG: print("[Control] Launching MuJoCo viewer...")
+
             # Launch passive viewer with model and data from qube
-            viewer = mujoco.viewer.launch_passive(qube.model, qube.data)
+            viewer = mujoco.viewer.launch_passive(qube.model, qube.data, key_callback=qube.key_callback)
             qube.viewer = viewer
             if config.DEBUG: print("[Control] Viewer launched.\n")
         except Exception as e:

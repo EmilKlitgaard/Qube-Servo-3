@@ -94,18 +94,18 @@
       </body>
     </body>
 
-    <!-- Disturbance pendulum for testing -->
-    <body name="disturbance_mount" pos="0.085 0 0.7445">
+    <!-- Disturbance striker for testing -->
+    <body name="striker_body" pos="0.085 0 0.7445">
       <!-- Hinge for striker pendulum -->
       <joint
-          name="pendulum"
+          name="striker"
           type="hinge"
           axis="1 0 0"
-          damping="0.0001"
+          damping="0.000001"
       />
       <!-- Weightless rod (~1g) -->
       <geom
-          name="disturbance_rod"
+          name="striker_rod"
           type="cylinder"
           fromto="0 0 0 0 0 -0.5"
           size="0.003"
@@ -114,9 +114,9 @@
           material="arm_mat"
       />
       <!-- 200g impact mass -->
-      <body name="disturbance_mass" pos="0 0 -0.5">
+      <body name="striker_mass" pos="0 0 -0.5">
           <geom
-              name="disturbance_capsule"
+              name="striker_capsule"
               type="capsule"
               size="0.0125"
               fromto="0.05 0 0 -0.05 0 0"

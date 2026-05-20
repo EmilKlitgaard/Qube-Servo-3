@@ -35,8 +35,8 @@ def get_model_file_path() -> str:
     Get the absolute path to Qube_Servo_3.xml model file.
     """
     root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    if config.PENDULUM_TEST_ENABLED:
-        model_file = os.path.join(root_dir, "Virtual_model", "Pendulum_test.xml")
+    if config.STRIKER_TEST_ENABLED:
+        model_file = os.path.join(root_dir, "Virtual_model", "Disturbance_test.xml")
     else:
         model_file = os.path.join(root_dir, "Virtual_model", "Qube_Servo_3.xml")
     return model_file
@@ -114,26 +114,26 @@ class Virtual(QubeInterface):
         self.alpha_joint = self.model.joint('alpha')
         self.motor_actuator = self.model.actuator('arm_motor')
 
-        # [OPTIONAL] Pendulum test setup: 
-        if config.PENDULUM_TEST_ENABLED:
+        # [OPTIONAL] Striker test setup: 
+        if config.STRIKER_TEST_ENABLED:
             # Set initial joint positions
-            self.pendulum_angle = math.radians(config.PENDULUM_TEST_START_ANGLE)
-            self.data.joint('alpha').qpos = math.pi                 # Start with pendulum up
-            self.data.joint('pendulum').qpos = self.pendulum_angle  # Set pendulum start angle
+            self.striker_angle = math.radians(config.STRIKER_TEST_START_ANGLE)
+            self.data.joint('alpha').qpos = math.pi                 # Start with striker up
+            self.data.joint('striker').qpos = self.striker_angle    # Set striker start angle
 
             # Get geom IDs for contact force measurement
-            self.pendulum_disturbance_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, "disturbance_capsule")
-            self.pendulum_target_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, "impact_target")
+            self.striker_disturbance_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, "striker_capsule")
+            self.striker_target_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, "impact_target")
 
-            # Define state variables for pendulum test
-            self.pendulum_locked = True
-            self.pendulum_release_time = None
-            self.pendulum_reset_time = None
-            self.pendulum_joint = self.data.joint("pendulum")
+            # Define state variables for striker test
+            self.striker_mass = 0.046
+            self.striker_impact_radius = 0.5
+            self.striker_contact = False
+            self.striker_locked = True
+            self.striker_release_time = None
+            self.striker_joint = self.data.joint("striker")
             self.contact_force = np.zeros(6, dtype=np.float64)
-            self.pendulum_total_impulse = 0.0
-            self.pendulum_peak_force = 0.0
-            self.pendulum_dt = self.model.opt.timestep
+            self.striker_dt = self.model.opt.timestep
 
         # Step 5: Forward kinematics: Compute all body positions and orientations
         mujoco.mj_forward(self.model, self.data)
@@ -157,6 +157,27 @@ class Virtual(QubeInterface):
         self.model = None
         self.viewer = None
         print("[Virtual] MuJoCo simulator closed.")
+
+
+    # ── Control interface ─────────────────────────────────────────────────────────
+    def key_callback(self, key: int) -> None:
+        # Backspace key: Reset simulation to initial state
+        if key == 259:  
+            if config.DEBUG: print("[Virtual] Backspace pressed, resetting...")
+            if self.viewer is not None:
+                self.reset()
+        
+        # Enter key: Toggle motor enabled/disabled
+        elif key == 257:  
+            if config.DEBUG: print("[Virtual] Enter pressed, toggling motor enabled state...")
+            self.enable(not self.enabled)
+
+        # Space key: Release striker (only for striker test)
+        elif key == 32 and config.STRIKER_TEST_ENABLED:
+            if config.DEBUG: print("[Virtual] Space pressed, releasing striker...")
+            self.striker_locked = False
+            self.striker_contact = False
+            self.striker_release_time = time.time()
 
 
     # ── Initialization helpers ────────────────────────────────────────────────────
@@ -185,15 +206,17 @@ class Virtual(QubeInterface):
         # Reset target time
         self.target_time = time.time()
 
-        # [OPTIONAL] Pendulum test: Set alpha and pendulum positions 
-        if config.PENDULUM_TEST_ENABLED:
+        # [OPTIONAL] Striker test: Set alpha and striker positions 
+        if config.STRIKER_TEST_ENABLED:
             # Reset joint positions
-            self.data.joint('alpha').qpos = math.pi                 # Start with pendulum up
-            self.data.joint('pendulum').qpos = self.pendulum_angle  # Set pendulum start angle
+            self.data.joint('alpha').qpos = math.pi                 # Start with striker up
+            self.data.joint('striker').qpos = self.striker_angle    # Set striker start angle
 
-            # Lock pendulum in place
-            self.pendulum_locked = True
-            self.pendulum_release_time = time.time() + 5            # Release after 5 seconds
+            # Lock striker in place
+            self.striker_locked = True
+            self.striker_contact = False
+            self.striker_release_time = time.time() + 3             # Release after 3 seconds
+            self.enable(True)
 
         print("[Virtual] Simulation reset.")
 
@@ -325,33 +348,36 @@ class Virtual(QubeInterface):
                     mujoco.mj_step(self.model, self.data)
                     self.viewer.sync()
 
-        # [OPTIONAL] Pendulum test:
-        if config.PENDULUM_TEST_ENABLED:
-            if self.pendulum_release_time is not None and self.pendulum_release_time < time.time():
-                self.pendulum_locked = False
-                self.pendulum_release_time = None
+        # [OPTIONAL] Striker test:
+        if config.STRIKER_TEST_ENABLED:
+            if self.striker_release_time is not None and self.striker_release_time < time.time():
+                self.striker_locked = False
+                self.striker_release_time = None
 
-            if self.pendulum_reset_time is not None and self.pendulum_reset_time < time.time():
-                self.pendulum_locked = True
-                self.pendulum_reset_time = None
+            # Reset striker if it has come to rest after contact
+            if self.striker_contact and not self.striker_locked and (abs(self.data.joint('striker').qvel.item()) < 0.01):
+                self.striker_locked = True
+                self.striker_contact = False
 
-            if self.pendulum_locked:
-                self.data.joint('pendulum').qvel = 0.0
-                self.data.joint('pendulum').qpos = self.pendulum_angle
+            # Lock striker in place if set
+            if self.striker_locked:
+                self.data.joint('striker').qvel = 0.0
+                self.data.joint('striker').qpos = self.striker_angle
 
+            # Calculate contact forces when striker impacts pendulum
             for i in range(self.data.ncon):
                 contact = self.data.contact[i]
                 g1 = contact.geom1
                 g2 = contact.geom2
-                if ((g1 == self.pendulum_disturbance_id and g2 == self.pendulum_target_id) or (g2 == self.pendulum_disturbance_id and g1 == self.pendulum_target_id)):
+                if ((g1 == self.striker_disturbance_id and g2 == self.striker_target_id) or (g2 == self.striker_disturbance_id and g1 == self.striker_target_id)):
                     mujoco.mj_contactForce(self.model, self.data, i, self.contact_force)
                     normal_force = abs(self.contact_force[0])
-                    impulse = normal_force * self.pendulum_dt
-                    self.pendulum_total_impulse += impulse
-                    if normal_force > self.pendulum_peak_force:
-                        self.pendulum_peak_force = normal_force
-                    print(f"Impact force: {normal_force:.2f} N | Impulse: {self.pendulum_total_impulse:.4f} Ns | Peak force: {self.pendulum_peak_force:.2f} N")
-                    self.pendulum_reset_time = time.time() + 0.5 # Reset pendulum 0.5s after impact
+                    if not self.striker_contact:
+                        self.striker_contact = True
+                        striker_omega = abs(self.data.joint('striker').qvel.item())
+                        striker_tip_speed = striker_omega * self.striker_impact_radius
+                        striker_energy = 0.5 * self.striker_mass * striker_tip_speed**2
+                        print(f"Contact: force={normal_force:.2f} N | Omega={striker_omega:.2f} rad/s | Tip speed={striker_tip_speed:.2f} m/s | Available impact energy={striker_energy:.4f} J")
 
         # Step the simulation
         mujoco.mj_step(self.model, self.data)
