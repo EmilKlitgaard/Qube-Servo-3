@@ -2,7 +2,7 @@ DEBUG: true                    # Whether to enable debug mode (prints additional
 ENERGY_TEST: false              # Whether to perform energy test during swing-up (only applies if DEBUG is true)
 
 PENDULUM_TEST: 
-  ENABLED: false                 # Activates the pendulum XML tree for simulation testing. (Requires SIMULATION to be true)
+  ENABLED: true                 # Activates the pendulum XML tree for simulation testing. (Requires SIMULATION to be true)
   START_ANGLE: 45               # Starting angle for pendulum test in degrees (only applies if PENDULUM_TEST is true)
 
 GUI:
