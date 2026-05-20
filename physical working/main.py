@@ -1,14 +1,11 @@
 from qube import qube
 from controller import controller
-from log import StepMetrics
-from time import sleep
 
 import time
 import math
 
 T = 0.002
-loops = 30  # HUSK AT SÆTTE DENNE
-log = True
+settle_hold = 0.5
 
 
 if __name__ == "__main__":
@@ -16,16 +13,11 @@ if __name__ == "__main__":
     q = qube()
     ctrl = controller()
 
-    if log:
-        metrics = StepMetrics(
-            tol=0.05,
-            settle_hold=0.5,
-            loop_count_max=loops
-        )
-    else:
-        metrics = None
-
     balance_angle = math.radians(20)
+    recovery_start = None
+    stable_since = None
+    ready_for_knockdown = False
+    recovery_active = False
 
     try:
         while True:
@@ -40,28 +32,42 @@ if __name__ == "__main__":
 
             if near_upright:
 
-                #V = ctrl.classic_pd( theta,alpha,theta_dot,alpha_dot)
-                V = ctrl.LQR(theta, alpha, theta_dot,alpha_dot)
+                V = ctrl.classic_pd( theta,alpha,theta_dot,alpha_dot)
+                #V = ctrl.LQR(theta, alpha, theta_dot,alpha_dot)
 
-                if log:
-                    target = math.pi if a_wrapped > 0 else -math.pi
-                    alpha_error = a_wrapped - target
+            
 
-                    now = time.perf_counter()
+                now = time.perf_counter()
 
-                    if not metrics.active:
-                        metrics.start(now, alpha_error)
+                if stable_since is None:
+                    stable_since = now
 
-                    done = metrics.update(now, alpha_error)
-                    if done:
-                        q.write(0.0)
-                        sleep(1)  
-                        
+                if recovery_active:
+                    if now - stable_since >= settle_hold:
+                        recovery_time = now - recovery_start
+
+                        print(
+                            f"Recovered and stabilized in "
+                            f"{recovery_time:.3f} s"
+                        )
+
+                        recovery_active = False
+                        recovery_start = None
+                        stable_since = None
+                        ready_for_knockdown = True
+
+                elif not ready_for_knockdown:
+                    if now - stable_since >= settle_hold:
+                        ready_for_knockdown = True
+
+                        print(
+                            "Pendulum stabilized. "
+                            "Push it to time the next recovery."
+                        )
 
             else:
 
-                if log and metrics.active:
-                    metrics.stop()
+                stable_since = None
 
                 V = ctrl.swing_up(
                     theta,
@@ -69,6 +75,12 @@ if __name__ == "__main__":
                     theta_dot,
                     alpha_dot
                 )
+
+                if ready_for_knockdown and not recovery_active:
+                    recovery_active = True
+                    recovery_start = time.perf_counter()
+
+                    print("Pendulum knocked down. Timing recovery...")
 
             q.write(V)
 
