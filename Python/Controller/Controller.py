@@ -30,23 +30,15 @@ class Controller:
         Default corresponds to reasonable values for the Qube.
     """
 
-    def __init__(self, dt: float = 0.001, lqr_k: list = [60.0, 5.0, 3.0, 3.0]):
-        self.dt = dt
+    def __init__(self, lqr_k: list = [60.0, 5.0, 3.0, 3.0]):
         self.k = lqr_k
         
         # Initialize swing-up controller
-        self.swingup = SwingUp(dt)        
+        self.swingup = SwingUp()        
 
         # Internal state
         self.mode = "swingup"  # "swingup" or "stabilize"
         
-    def torque_to_voltage(self, torque: float, theta_dot: float) -> float:
-        # V = R/kt * torque + Ke * theta_dot
-       
-        voltage = (config.PLANT_MOTOR_RESISTANCE / config.PLANT_TORQUE_CONSTANT) * torque + (config.PLANT_MOTOR_CONSTANT * theta_dot)
-        return max(config.CONTROL_VOLTAGE_MIN, min(config.CONTROL_VOLTAGE_MAX, voltage))  # Saturate to limits
-
-
 
     def compute_modern_stabilize(self, theta: float, theta_dot: float, alpha: float, alpha_dot: float, theta_target: float = 0.0, alpha_target: float = 0.0) -> float:
         """
@@ -113,8 +105,7 @@ class Controller:
         Kd = 1.0   # Derivative gain for angular velocity
         Kp_theta = 3.0  # Proportional gain for arm angle error
         Kd_theta = 0.5  # Derivative gain for arm angular velocity  
-        torque = (Kp * alpha_error) + (Kd * alpha_dot) + (Kp_theta * theta_error) + (Kd_theta * theta_dot)  # Add arm stabilization terms
-        voltage = self.torque_to_voltage(torque, theta_dot)
+        voltage = (Kp * alpha_error) + (Kd * alpha_dot) + (Kp_theta * theta_error) + (Kd_theta * theta_dot)  
 
         return voltage
 
@@ -134,29 +125,14 @@ class Controller:
         -------
         voltage : Motor voltage command [V], saturated to [-18, +10].
         mode : Current mode: "swingup" or "stabilize".
-      
-          """
-        """
-        if theta > math.radians(100) or theta < math.radians(-100):
-            #if config.DEBUG: 
-            print("[Controller] Arm exceeded ±100 degrees. Switching back to swing-up mode.")
-            self.swingup.phase = self.swingup.PHASE_INIT # Reset swing-up phase
-            self.mode = "swingup"
-             # Delay to prevent immediate re-triggering
-            for i in range (1, 1000):
-                    print()
         """
 
         if self.mode == "swingup":
             # Compute swing-up voltage
-            if not self.swingup.energy_reached(alpha, alpha_dot):
-                voltage = self.swingup.compute(theta, theta_dot, alpha, alpha_dot)
-            else:
-                if config.DEBUG: print("[Controller] Swing-up energy reached.")
-                voltage = 0.0  # No voltage needed when energy is sufficient, just switch to stabilize mode
+            voltage = self.swingup.swing_up(theta, theta_dot, alpha, alpha_dot)
 
             # Check if we are close enough to upright to switch to stabilization
-            if self.swingup.is_far_upright(alpha):
+            if self.swingup.is_upright(alpha):
                 if config.DEBUG: print("[Controller] Switching to stabilization mode.")
                 self.mode = "stabilize"
         else:
@@ -167,12 +143,8 @@ class Controller:
                 voltage = self.compute_classic_stabilize(theta, theta_dot, alpha, alpha_dot, theta_target, alpha_target)
             
             # Check if pendulum has fallen down during stabilization
-            if not self.swingup.is_upright(alpha):
+            if self.swingup.is_down(alpha):
                 if config.DEBUG: print("[Controller] Pendulum fell down. Switching back to swing-up mode.")
-                self.swingup.phase = self.swingup.PHASE_INIT # Reset swing-up phase
                 self.mode = "swingup"
-
-        # Saturate voltage to motor limits
-        voltage = max(config.CONTROL_VOLTAGE_MIN, min(config.CONTROL_VOLTAGE_MAX, voltage))
 
         return voltage, self.mode

@@ -35,20 +35,21 @@
              type="hinge"
              pos="0 0 0"
              axis="0 0 1"
-             limited="false"
-             damping="0.0"/>
+             limited="true"
+              range="-2.35619 2.35619"
+             damping="0.00001"/>
 
       <!-- Motor shaft / axis visual, rotates with theta -->
       <geom type="cylinder"
             size="0.011"
-            fromto="0 0 -0.011 0 0 -0.0228"
+            fromto="0 0 -0.0228 0 0 -0.011"
             mass="0.0106"
             material="joint_mat"/>
 
       <!-- Visual encoder attached to motor axis, negligible mass -->
       <geom type="cylinder"
             size="0.014"
-            fromto="0.019 0 0 -0.033 0 0"
+            fromto="-0.019 0 0 0.033 0 0"
             mass="0.000001"
             contype="0"
             conaffinity="0"
@@ -60,17 +61,17 @@
                type="hinge"
                pos="0 0 0"
                axis="1 0 0"
-               damping="0.0"/>
+               damping="0.00001"/>
 
         <!-- Arm geometry: rotates with alpha -->
         <geom type="cylinder"
               size="0.00325"
-              fromto="-0.0886 0 0 0.0215 0 0"
+              fromto="0.0886 0 0 -0.0215 0 0"
               mass="0.095"
               material="arm_mat"/>
 
         <!-- Pendulum rigidly attached to the end of the arm -->
-        <body name="pendulum" pos="-0.08385 0 0">
+        <body name="pendulum" pos="0.08385 0 0">
           <!-- No joint here: pendulum is fixed to the arm -->
 
           <geom type="cylinder"

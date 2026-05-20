@@ -94,9 +94,9 @@ def run_controller(qube: QubeInterface, logger: Logger, stop_event: threading.Ev
     controller = Controller()
     if config.DEBUG:
         print("[Control] Starting control loop...")
-        print(f"[Control] Physics timestep: {controller.dt * 1000:.1f} ms")
+        print(f"[Control] Physics timestep: {config.CONTROL_DT * 1000:.1f} ms")
         print(f"[Control] Simulation speed: {config.QUBE_SIMULATION_SPEED}x")
-        print(f"[Control] Timestep: {controller.dt * 1000 / config.QUBE_SIMULATION_SPEED:.1f} ms")
+        print(f"[Control] Timestep: {config.CONTROL_DT * 1000 / config.QUBE_SIMULATION_SPEED:.1f} ms")
         print(f"[Control] Duration: {duration if duration is not None else 'unlimited'} s")
 
     # Initialize visualizer if enabled (only for Virtual simulator)
