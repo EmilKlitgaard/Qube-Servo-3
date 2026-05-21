@@ -1,5 +1,5 @@
 DEBUG: false                    # Whether to enable debug mode (prints additional information)
-DEBUG: false                    # Whether to enable debug mode (prints additional information)
+
 ENERGY_TEST: false              # Whether to perform energy test during swing-up (only applies if DEBUG is true)
 
 DISTURBANCE_TEST: 
