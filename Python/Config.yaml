@@ -1,4 +1,5 @@
 DEBUG: false                    # Whether to enable debug mode (prints additional information)
+DEBUG: false                    # Whether to enable debug mode (prints additional information)
 ENERGY_TEST: false              # Whether to perform energy test during swing-up (only applies if DEBUG is true)
 
 DISTURBANCE_TEST: 
@@ -9,7 +10,7 @@ SPECIFICATION_TEST:
   ENABLED: true                # Meassures the rise-time, settling time and overshoot (only applies if SIMULATION is true)
 
 GUI:
-  ENABLED: false                 # Whether to enable the GUI (Only applies if VISUALIZE is false)
+  ENABLED: false                # Whether to enable the GUI (Only applies if VISUALIZE is false)
   UPDATE_RATE: 100              # GUI update rate in Hz (only applies if ENABLED is true)
 
 UART:
@@ -31,9 +32,10 @@ CONTROL:
   VOLTAGE_MIN: -10.0            # Minimum motor voltage [V]
 
 PLANT:
+  # Physical/simulation parameters (NOT CORRECT VALUES, MUST BE TUNED)
   MOTOR_CONSTANT: 0.04136       # Motor torque constant [Nm/V]
   TORQUE_CONSTANT: 0.04136      # Torque constant (same as motor constant for direct drive) [Nm/V]
-  MOTOR_RESISTANCE: 7.82        # Motor resistance [Ohms]
+  MOTOR_RESISTANCE: 7.63        # Motor resistance [Ohms]
   ARM_LENGTH: 0.085             # Distance from pivot to encoder axis [m]
   PENDULUM_LENGTH: 0.129        # Length of pendulum rod [m]
   ARM_MASS: 0.095               # Mass of arm [kg]
