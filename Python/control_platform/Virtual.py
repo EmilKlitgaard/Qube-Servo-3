@@ -35,7 +35,7 @@ def get_model_file_path() -> str:
     Get the absolute path to Qube_Servo_3.xml model file.
     """
     root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    if config.STRIKER_TEST_ENABLED:
+    if config.DISTURBANCE_TEST_ENABLED:
         model_file = os.path.join(root_dir, "Virtual_model", "Disturbance_test.xml")
     else:
         model_file = os.path.join(root_dir, "Virtual_model", "Qube_Servo_3.xml")
@@ -115,9 +115,9 @@ class Virtual(QubeInterface):
         self.motor_actuator = self.model.actuator('arm_motor')
 
         # [OPTIONAL] Striker test setup: 
-        if config.STRIKER_TEST_ENABLED:
+        if config.DISTURBANCE_TEST_ENABLED:
             # Set initial joint positions
-            self.striker_angle = math.radians(config.STRIKER_TEST_START_ANGLE)
+            self.striker_angle = math.radians(config.DISTURBANCE_TEST_START_ANGLE)
             self.data.joint('alpha').qpos = math.pi                 # Start with striker up
             self.data.joint('striker').qpos = self.striker_angle    # Set striker start angle
 
@@ -127,7 +127,7 @@ class Virtual(QubeInterface):
 
             # Define state variables for striker test
             self.striker_mass = 0.046
-            self.striker_impact_radius = 0.5
+            self.striker_impact_radius = 0.4
             self.striker_contact = False
             self.striker_locked = True
             self.striker_release_time = None
@@ -173,7 +173,7 @@ class Virtual(QubeInterface):
             self.enable(not self.enabled)
 
         # Space key: Release striker (only for striker test)
-        elif key == 32 and config.STRIKER_TEST_ENABLED:
+        elif key == 32 and config.DISTURBANCE_TEST_ENABLED:
             if config.DEBUG: print("[Virtual] Space pressed, releasing striker...")
             self.striker_locked = False
             self.striker_contact = False
@@ -207,7 +207,7 @@ class Virtual(QubeInterface):
         self.target_time = time.time()
 
         # [OPTIONAL] Striker test: Set alpha and striker positions 
-        if config.STRIKER_TEST_ENABLED:
+        if config.DISTURBANCE_TEST_ENABLED:
             # Reset joint positions
             self.data.joint('alpha').qpos = math.pi                 # Start with striker up
             self.data.joint('striker').qpos = self.striker_angle    # Set striker start angle
@@ -232,7 +232,7 @@ class Virtual(QubeInterface):
     def set_led(self, r: float, g: float, b: float) -> None:
         """Set LED state and update visualization color (thread-safe with viewer lock)."""
         # Update internal state
-        super().set_led(r, g, b)  
+        super().set_led(r, g, b)
 
         # Per MuJoCo docs: must acquire viewer lock before modifying model state
         if config.QUBE_VISUALIZE and self.model is not None and self.viewer is not None:
@@ -316,7 +316,58 @@ class Virtual(QubeInterface):
         # Check if model and data are initialized
         if self.model is None or self.data is None:
             raise RuntimeError("Simulator not open. Call open() first.")
-        
+
+        # [OPTIONAL] Energy test: Lock theta in place once pendulum reaches target energy for swing-up
+        if config.ENERGY_TEST:
+            if energy_reached(self, self.data.joint('alpha').qpos.item(), self.data.joint('alpha').qvel.item()):
+                while True:
+                    time.sleep(0.01)
+                    # Lock theta at current position
+                    self.data.joint('theta').qpos = self.data.joint('theta').qpos.item()
+                    self.data.joint('theta').qvel = 0.0
+                    self.data.actuator('arm_motor').ctrl = 0.0
+                    mujoco.mj_step(self.model, self.data)
+                    self.viewer.sync()
+
+        # [OPTIONAL] Striker test:
+        if config.DISTURBANCE_TEST_ENABLED:
+            if self.striker_release_time is not None and self.striker_release_time < time.time():
+                self.striker_locked = False
+                self.striker_release_time = None
+
+            # Reset striker if it has come to rest after contact
+            if self.striker_contact and not self.striker_locked and (abs(self.data.joint('striker').qvel.item()) < 0.01):
+                self.striker_locked = True
+                self.striker_contact = False
+                self.striker_angle -= math.radians(0.1)  # Incrementally lower striker start angle for next test
+                self.striker_release_time = time.time() + 1
+
+            # Lock striker in place if set
+            if self.striker_locked:
+                self.data.joint('striker').qvel = 0.0
+                self.data.joint('striker').qpos = self.striker_angle
+
+            # Calculate contact forces when striker first impacts pendulum
+            if not self.striker_contact:
+                for i in range(self.data.ncon):
+                    contact = self.data.contact[i]
+                    g1 = contact.geom1
+                    g2 = contact.geom2
+                    if ((g1 == self.striker_disturbance_id and g2 == self.striker_target_id) or (g2 == self.striker_disturbance_id and g1 == self.striker_target_id)):
+                        mujoco.mj_contactForce(self.model, self.data, i, self.contact_force)
+
+                        # Use the first normal-force sample only; later samples are ignored.
+                        normal_force = abs(self.contact_force[0])
+                        alpha_omega = abs(self.data.joint('alpha').qvel.item())
+                        alpha_tip_speed = alpha_omega * config.PLANT_PENDULUM_LENGTH
+
+                        # Estimate transferred energy from the measured contact force over one timestep.
+                        transferred_energy = normal_force * alpha_tip_speed * self.striker_dt
+
+                        self.striker_contact = True
+                        print(f"Contact: force={normal_force:.2f} N | Alpha tip speed={alpha_tip_speed:.2f} m/s | Transferred energy={transferred_energy:.4f} J | Striker start angle={math.degrees(self.striker_angle):.1f}°")
+                        break
+
         # Apply control: convert voltage to torque
         if self.enabled:
             # Joint velocity
@@ -335,49 +386,6 @@ class Virtual(QubeInterface):
 
         # Set actuator control using named access
         self.data.actuator('arm_motor').ctrl = torque
-
-        # [OPTIONAL] Energy test: Lock theta in place once pendulum reaches target energy for swing-up
-        if config.ENERGY_TEST:
-            if energy_reached(self, self.data.joint('alpha').qpos.item(), self.data.joint('alpha').qvel.item()):
-                while True:
-                    time.sleep(0.01)
-                    # Lock theta at current position
-                    self.data.joint('theta').qpos = self.data.joint('theta').qpos.item()
-                    self.data.joint('theta').qvel = 0.0
-                    self.data.actuator('arm_motor').ctrl = 0.0
-                    mujoco.mj_step(self.model, self.data)
-                    self.viewer.sync()
-
-        # [OPTIONAL] Striker test:
-        if config.STRIKER_TEST_ENABLED:
-            if self.striker_release_time is not None and self.striker_release_time < time.time():
-                self.striker_locked = False
-                self.striker_release_time = None
-
-            # Reset striker if it has come to rest after contact
-            if self.striker_contact and not self.striker_locked and (abs(self.data.joint('striker').qvel.item()) < 0.01):
-                self.striker_locked = True
-                self.striker_contact = False
-
-            # Lock striker in place if set
-            if self.striker_locked:
-                self.data.joint('striker').qvel = 0.0
-                self.data.joint('striker').qpos = self.striker_angle
-
-            # Calculate contact forces when striker impacts pendulum
-            for i in range(self.data.ncon):
-                contact = self.data.contact[i]
-                g1 = contact.geom1
-                g2 = contact.geom2
-                if ((g1 == self.striker_disturbance_id and g2 == self.striker_target_id) or (g2 == self.striker_disturbance_id and g1 == self.striker_target_id)):
-                    mujoco.mj_contactForce(self.model, self.data, i, self.contact_force)
-                    normal_force = abs(self.contact_force[0])
-                    if not self.striker_contact:
-                        self.striker_contact = True
-                        striker_omega = abs(self.data.joint('striker').qvel.item())
-                        striker_tip_speed = striker_omega * self.striker_impact_radius
-                        striker_energy = 0.5 * self.striker_mass * striker_tip_speed**2
-                        print(f"Contact: force={normal_force:.2f} N | Omega={striker_omega:.2f} rad/s | Tip speed={striker_tip_speed:.2f} m/s | Available impact energy={striker_energy:.4f} J")
 
         # Step the simulation
         mujoco.mj_step(self.model, self.data)
