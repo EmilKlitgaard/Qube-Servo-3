@@ -339,8 +339,11 @@ class Virtual(QubeInterface):
             if self.striker_contact and not self.striker_locked and (abs(self.data.joint('striker').qvel.item()) < 0.01):
                 self.striker_locked = True
                 self.striker_contact = False
-                self.striker_angle -= math.radians(0.1)  # Incrementally lower striker start angle for next test
-                self.striker_release_time = time.time() + 1
+
+                # Auto start next test with incrementally lower striker angle (Requires simulation speed to be 100x)
+                if config.DISTURBANCE_TEST_AUTO_START:
+                    self.striker_angle -= math.radians(0.1)  # Incrementally lower striker start angle for next test
+                    self.striker_release_time = time.time() + 1
 
             # Lock striker in place if set
             if self.striker_locked:

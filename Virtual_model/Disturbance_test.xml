@@ -88,8 +88,7 @@
             contype="1"
             conaffinity="1"
             solref="0.001 1"
-            solimp="0.99 0.999 0.001"
-          />
+            solimp="0.99 0.999 0.001"/>
         </body>
       </body>
     </body>
