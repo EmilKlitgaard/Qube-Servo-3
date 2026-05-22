@@ -110,8 +110,8 @@ def main():
             )
             controller_thread.start()
         else:
-            # Start control loop in main thread if no GUI (for simulation or headless mode)
-            print("[Main] GUI disabled or running in simulation. Running control loop in main thread...")
+            # Start control loop in main thread if no GUI (headless mode)
+            print("[Main] GUI disabled. Running control loop in main thread...")
             control_loop(qube, logger, stop_event)
             controller_thread = None
 
