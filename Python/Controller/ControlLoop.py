@@ -94,9 +94,9 @@ def run_controller(qube: QubeInterface, logger: Logger, stop_event: threading.Ev
     controller = Controller()
     if config.DEBUG:
         print("[Control] Starting control loop...")
-        print(f"[Control] Physics timestep: {controller.dt * 1000:.1f} ms")
+        print(f"[Control] Physics timestep: {config.CONTROL_DT * 1000:.1f} ms")
         print(f"[Control] Simulation speed: {config.QUBE_SIMULATION_SPEED}x")
-        print(f"[Control] Timestep: {controller.dt * 1000 / config.QUBE_SIMULATION_SPEED:.1f} ms")
+        print(f"[Control] Timestep: {config.CONTROL_DT * 1000 / config.QUBE_SIMULATION_SPEED:.1f} ms")
         print(f"[Control] Duration: {duration if duration is not None else 'unlimited'} s")
 
     # Initialize visualizer if enabled (only for Virtual simulator)
@@ -105,8 +105,9 @@ def run_controller(qube: QubeInterface, logger: Logger, stop_event: threading.Ev
         try:
             import mujoco.viewer
             if config.DEBUG: print("[Control] Launching MuJoCo viewer...")
+
             # Launch passive viewer with model and data from qube
-            viewer = mujoco.viewer.launch_passive(qube.model, qube.data)
+            viewer = mujoco.viewer.launch_passive(qube.model, qube.data, key_callback=qube.key_callback)
             qube.viewer = viewer
             if config.DEBUG: print("[Control] Viewer launched.\n")
         except Exception as e:
@@ -120,7 +121,7 @@ def run_controller(qube: QubeInterface, logger: Logger, stop_event: threading.Ev
     # Control loop
     try:
         iteration = 0
-        round_time = time.time()
+        """round_time = time.time()"""
 
         while not stop_event.is_set():
             # Check exit condition
@@ -134,20 +135,19 @@ def run_controller(qube: QubeInterface, logger: Logger, stop_event: threading.Ev
                 break
             
             # Print round time for debugging
-            """if config.DEBUG: 
+            """
             time_now = time.time()
             print(f"Round time: {(time_now - round_time) * 1000.0:.3f} ms")
-            round_time = time_now"""
+            round_time = time_now
+            """
 
             # Read current state
             theta, theta_dot, alpha, alpha_dot = qube.read()
             
-            # Compute control from controller
-            # chose contrller type in config
+            # Compute control from controller (choose controller type in config)
             voltage, mode = controller.compute(theta, theta_dot, alpha, alpha_dot, qube.target_theta, qube.target_alpha)
             
             # Apply control
-            print(f"Voltage command: {voltage:.2f} V")
             qube.write(voltage)
             
             # Log data if logging enabled

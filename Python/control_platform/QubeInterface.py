@@ -29,12 +29,6 @@ class QubeInterface(ABC):
         self.voltage_demand = 0.0
         self.motor_constant = motor_constant
 
-        # Timing variables for real-time control
-        self.dt = dt
-        self.run_time = 0.0
-        self.tick_time = self.dt / config.QUBE_SIMULATION_SPEED
-        self.target_time = time.time()   # Target time for next step (enables catch-up if falling behind)
-
         # Target state
         self.target_theta = 0.0
         self.target_alpha = 0.0
@@ -43,6 +37,12 @@ class QubeInterface(ABC):
         self.led_r = 0.0
         self.led_g = 0.0
         self.led_b = 0.0
+
+        # Timing variables for real-time control
+        self.dt = dt
+        self.run_time = 0.0
+        self.tick_time = self.dt / config.QUBE_SIMULATION_SPEED
+        self.target_time = time.time()   # Target time for next step (enables catch-up if falling behind)
 
         # Flag for starting control loop (used in GUI mode to wait for user input)
         self.loop_running = False
@@ -84,7 +84,7 @@ class QubeInterface(ABC):
                 if config.DEBUG: print("[QubeInterface] Waiting for GUI start command...")
                 time.sleep(0.1)
         else:
-            input("\nPress ENTER to start control loop...")
+            input("\nPress ENTER to start control loop...\n")
 
         # Initialize hardware
         self.reset()
@@ -136,15 +136,3 @@ class QubeInterface(ABC):
 
         # Store and saturate voltage to amplifier limit
         self.voltage_demand = max(config.CONTROL_VOLTAGE_MIN, min(config.CONTROL_VOLTAGE_MAX, voltage))
-
-        # Update real-time timing with active catch-up
-        self.run_time += self.dt
-        self.target_time += self.tick_time
-        self.sleep_time = self.target_time - time.time()
-        if self.sleep_time > 0:
-            # Ahead of schedule: Sleep to maintain timing
-            time.sleep(self.sleep_time)
-        elif config.DEBUG and self.sleep_time < -self.tick_time * 0.1:
-            # Behind schedule: Report lag and skip sleep to catch up on next iteration
-            #print(f"[Control] Behind: {-self.sleep_time*1000:.1f}ms (catching up...)")
-            pass

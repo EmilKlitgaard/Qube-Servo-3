@@ -26,26 +26,93 @@ class Controller:
     ----------
     dt : Control timestep [s].
     lqr_k : list of 4 floats
-        LQR feedback gains [k_theta, k_theta_dot, k_alpha, k_alpha_dot].
+        LQR feedback gains [k_alpha, k_alpha_dot, k_theta, k_theta_dot].
         Default corresponds to reasonable values for the Qube.
     """
 
-    def __init__(self, dt: float = 0.001, lqr_k: list = [3.0, 3.0, 60.0, 5.0]):
-        self.dt = dt
+    def __init__(self, lqr_k: list = [37.1, 1.9, 4.3, 1]):
         self.k = lqr_k
         
         # Initialize swing-up controller
-        self.swingup = SwingUp(dt)        
+        self.swingup = SwingUp()        
 
         # Internal state
         self.mode = "swingup"  # "swingup" or "stabilize"
-        
-    def torque_to_voltage(self, torque: float, theta_dot: float) -> float:
-        # V = R/kt * torque + Ke * theta_dot
-       
-        voltage = (config.PLANT_MOTOR_RESISTANCE / config.PLANT_TORQUE_CONSTANT) * torque + (config.PLANT_MOTOR_CONSTANT * theta_dot)
-        return max(config.CONTROL_VOLTAGE_MIN, min(config.CONTROL_VOLTAGE_MAX, voltage))  # Saturate to limits
 
+        # [OPTIONAL] Specification test: 
+        if config.SPECIFICATION_TEST_ENABLED:
+            self.specification_finished = False
+            self.specification_direction = None
+            self.specification_start_angle = 20.0       # Starting angle for test (when entering stabilization mode) in degrees
+            self.specification_target_angle = 2.0       # Target angle for success (+/- 2 degrees from upright)
+            self.specification_settling_time = None     # Measured settling time (from start of stabilizing to on target)
+            self.specification_overshoot = 0.0          # Measured overshoot angle (start_angle_deg / overshoot_angle_deg * 100)
+            self.specification_rise_time = None         # Measured rise time (from 10% to 90% of target when entering stabilization mode)
+            self.specification_rise_time_start = None   # Time when we first reach 10% of target angle
+            self.specification_rise_time_10 = self.specification_start_angle - (self.specification_start_angle * 0.1)  # 10% of target angle
+            self.specification_rise_time_90 = self.specification_start_angle - (self.specification_start_angle * 0.9)  # 90% of target angle
+            self.specification_on_target_time = None    # Time when we first get on target (for settling time measurement)
+            self.swingup.up_threshold = self.specification_start_angle  # Override swing-up threshold to start stabilization at the desired test angle
+            print(f"[Specification Test] Starting angle: {self.swingup.up_threshold}°, 10% rise time: {self.specification_rise_time_10:.1f}°, 90% rise time: {self.specification_rise_time_90:.1f}°")
+
+
+    def check_specification_test(self, alpha: float) -> None:
+        if self.specification_settling_time is not None:
+            if not self.specification_finished:
+                # Rise time: Start at 10% of target angle and end at 90% of target angle
+                if self.specification_rise_time_start is None and self.specification_rise_time is None:
+                    if self.specification_direction == -1 and alpha > math.radians(180) and alpha > math.radians(360 - self.specification_rise_time_10):
+                        self.specification_rise_time_start = time.time()
+                        print(f"[Specification Test] Rise time start: {self.specification_rise_time_start-self.specification_settling_time:.2f}s")
+                    elif self.specification_direction == 1 and alpha < math.radians(180) and alpha < math.radians(self.specification_rise_time_10):
+                        self.specification_rise_time_start = time.time()
+                        print(f"[Specification Test] Rise time start: {self.specification_rise_time_start-self.specification_settling_time:.2f}s")
+                elif self.specification_rise_time is None:
+                    if self.specification_direction == -1 and alpha > math.radians(180) and alpha > math.radians(360 - self.specification_rise_time_90):
+                        self.specification_rise_time = time.time() - self.specification_rise_time_start
+                        print(f"[Specification Test] Rise time end: {self.specification_rise_time:.2f}s")
+                    elif self.specification_direction == 1 and alpha < math.radians(180) and alpha < math.radians(self.specification_rise_time_90):
+                        self.specification_rise_time = time.time() - self.specification_rise_time_start
+                        print(f"[Specification Test] Rise time end: {self.specification_rise_time:.2f}s")
+
+                # Overshoot:
+                if self.specification_direction == -1:
+                    if alpha > self.specification_overshoot and alpha < math.radians(180):
+                        self.specification_overshoot = alpha
+                        print(f"[Specification Test] New overshoot 1: {math.degrees(self.specification_overshoot):.1f}°")
+                elif self.specification_direction == 1:
+                    if abs((alpha - math.radians(360))) > self.specification_overshoot and alpha > math.radians(180):
+                        self.specification_overshoot = abs((alpha - math.radians(360)))
+                        print(f"[Specification Test] New overshoot 2: {math.degrees(self.specification_overshoot):.1f}°")
+
+                # Setteling time:
+                alpha_threshold = math.radians(self.specification_target_angle)
+                alpha_on_target = alpha < alpha_threshold or abs(alpha - math.radians(360)) < alpha_threshold
+                if alpha_on_target and self.specification_on_target_time is None:
+                    self.specification_on_target_time = time.time()
+                    print(f"[Specification Test] On target at time: {self.specification_on_target_time-self.specification_settling_time:.2f}s")
+                elif not alpha_on_target:
+                    self.specification_on_target_time = None
+
+                if self.specification_on_target_time is not None:
+                    if (time.time() - self.specification_on_target_time) >= 1:
+                        self.specification_finished = True
+                    else:
+                        print(f"[Specification Test] Currently on target for {time.time() - self.specification_on_target_time:.2f}s")
+            
+            else:
+                rise_time = self.specification_rise_time if self.specification_rise_time is not None else float('inf')
+                total_settling_time = self.specification_on_target_time - self.specification_settling_time
+                overshoot_pct = (math.degrees(self.specification_overshoot) / self.specification_start_angle) * 100  # Convert overshoot to percentage of starting angle
+                print(f"[Specification Test] FINISHED: Rise time: {rise_time:.2f}s, Settling time: {total_settling_time:.2f}s, Overshoot: {overshoot_pct:.2f}%")
+                
+                # Reset variables
+                self.specification_finished = False
+                self.specification_rise_time = None
+                self.specification_rise_time_start = None
+                self.specification_settling_time = None
+                self.specification_on_target_time = None
+                self.specification_overshoot = 0.0
 
 
     def compute_modern_stabilize(self, theta: float, theta_dot: float, alpha: float, alpha_dot: float, theta_target: float = 0.0, alpha_target: float = 0.0) -> float:
@@ -67,16 +134,19 @@ class Controller:
         voltage : Motor voltage command [V].
         """
 
+        # Optimal physical values: 35.0, 1.0, 3.0, 0.5
+        # Optimal virtual values: 37.1, 1.9, 4.3, 1
+
         # Wrap alpha to [-π, π] for correct angle error around upright
         alpha_wrapped = math.atan2(math.sin(alpha), math.cos(alpha))
         alpha_target_wrapped = math.atan2(math.sin(alpha_target), math.cos(alpha_target))
         
         # Compute errors relative to targets
-        theta_error = theta - theta_target
         alpha_error = alpha_wrapped - alpha_target_wrapped
+        theta_error = theta - theta_target
         
-        # State vector: [theta_error, theta_dot, alpha_error, alpha_dot]
-        state = [theta_error, theta_dot, alpha_error, alpha_dot]
+        # State vector: [alpha_error, alpha_dot, theta_error, theta_dot]
+        state = [alpha_error, alpha_dot, theta_error, theta_dot]
         
         # Compute control: Voltage = -K * state
         voltage = sum(k_i * state_i for k_i, state_i in zip(self.k, state))
@@ -107,14 +177,13 @@ class Controller:
         alpha_error = alpha_wrapped - alpha_target
         theta_error = theta - theta_target
     
-        # PD control: u = -Kp * alpha_error - Kd * alpha_dot
-        # decent vals = 49, 5.0, 3, 3
-        Kp = 0.225  # Proportional gain for angle error
-        Kd = 0.015   # Derivative gain for angular velocity
-        Kp_theta = 0.01875  # Proportional gain for arm angle error
-        Kd_theta = 0.003  # Derivative gain for arm angular velocity  
-        torque = (Kp * alpha_error) + (Kd * alpha_dot) + (Kp_theta * theta_error) + (Kd_theta * theta_dot)  # Add arm stabilization terms
-        voltage = self.torque_to_voltage(torque, theta_dot)
+        # Optimal physical values: 35.0, 1.0, 3.0, 0.5
+        # Optimal virtual values: 39.3, 2.56, 3.0, 0.5
+        Kp = 39.3  # Proportional gain for angle error
+        Kd = 2.56   # Derivative gain for angular velocity
+        Kp_theta = 3.0  # Proportional gain for arm angle error
+        Kd_theta = 0.5  # Derivative gain for arm angular velocity  
+        voltage = (Kp * alpha_error) + (Kd * alpha_dot) + (Kp_theta * theta_error) + (Kd_theta * theta_dot)  
 
         return voltage
 
@@ -134,27 +203,22 @@ class Controller:
         -------
         voltage : Motor voltage command [V], saturated to [-18, +10].
         mode : Current mode: "swingup" or "stabilize".
-      
-          """
-        """
-        if theta > math.radians(100) or theta < math.radians(-100):
-            #if config.DEBUG: 
-            print("[Controller] Arm exceeded ±100 degrees. Switching back to swing-up mode.")
-            self.swingup.phase = self.swingup.PHASE_INIT # Reset swing-up phase
-            self.mode = "swingup"
-             # Delay to prevent immediate re-triggering
-            for i in range (1, 1000):
-                    print()
         """
 
         if self.mode == "swingup":
             # Compute swing-up voltage
-            voltage = self.swingup.compute(theta, theta_dot, alpha, alpha_dot)
+            voltage = self.swingup.swing_up(theta, theta_dot, alpha, alpha_dot)
 
             # Check if we are close enough to upright to switch to stabilization
-            #if self.swingup.is_far_upright(alpha):
-            #    if config.DEBUG: print("[Controller] Switching to stabilization mode.")
-            #    self.mode = "stabilize"
+            if self.swingup.is_upright(alpha):
+                self.mode = "stabilize"
+                if config.DEBUG: print("[Controller] Switching to stabilization mode.")
+
+                # [OPTIONAL] Specification test: Start measuring settling time and overshoot when entering stabilization mode
+                if config.SPECIFICATION_TEST_ENABLED:
+                    print(f"[Specification Test] Starting specification test...")
+                    self.specification_direction = 1 if alpha < math.radians(180) else -1
+                    self.specification_settling_time = time.time()
         else:
             # Compute stabilization voltage
             if config.CONTROL_MODERN_STABILIZATION:
@@ -163,12 +227,12 @@ class Controller:
                 voltage = self.compute_classic_stabilize(theta, theta_dot, alpha, alpha_dot, theta_target, alpha_target)
             
             # Check if pendulum has fallen down during stabilization
-            if not self.swingup.is_upright(alpha):
-                if config.DEBUG: print("[Controller] Pendulum fell down. Switching back to swing-up mode.")
-                self.swingup.phase = self.swingup.PHASE_INIT # Reset swing-up phase
+            if self.swingup.is_down(alpha):
                 self.mode = "swingup"
+                if config.DEBUG: print("[Controller] Pendulum fell down. Switching back to swing-up mode.")
 
-        # Saturate voltage to motor limits
-        voltage = max(config.CONTROL_VOLTAGE_MIN, min(config.CONTROL_VOLTAGE_MAX, voltage))
+            # [OPTIONAL] Specification test: Check for rise-time, settling-time and overshoot
+            if config.SPECIFICATION_TEST_ENABLED:
+                self.check_specification_test(alpha)
 
         return voltage, self.mode

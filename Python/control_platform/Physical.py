@@ -139,6 +139,5 @@ class Physical(QubeInterface):
     def write(self, voltage: float) -> None:
         # Update parrent class state
         super().write(voltage)
-
         self.analog_buffer[0] = self.voltage_demand
         self.card.write_analog(self.analog_channel, 1, self.analog_buffer)
