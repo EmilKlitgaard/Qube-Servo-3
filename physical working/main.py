@@ -19,7 +19,7 @@ if __name__ == "__main__":
     if log:
         metrics = StepMetrics(
             tol=0.05,
-            settle_hold=0.5,
+            settle_hold=2.0,
             loop_count_max=loops
         )
     else:
@@ -40,8 +40,8 @@ if __name__ == "__main__":
 
             if near_upright:
 
-                #V = ctrl.classic_pd( theta,alpha,theta_dot,alpha_dot)
-                V = ctrl.LQR(theta, alpha, theta_dot,alpha_dot)
+                V = ctrl.classic_pd( theta,alpha,theta_dot,alpha_dot)
+                #V = ctrl.LQR(theta, alpha, theta_dot,alpha_dot)
 
                 if log:
                     target = math.pi if a_wrapped > 0 else -math.pi
