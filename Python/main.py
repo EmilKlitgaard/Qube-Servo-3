@@ -21,7 +21,7 @@ def validate_environment():
         
         # Check if we're already running under mjpython (via environment variable)
         is_mjpython = os.environ.get("MJPYTHON_LAUNCHER", "false").lower() == "true"
-        
+        """
         if not is_mjpython:
             import sys
             import subprocess
@@ -39,7 +39,7 @@ def validate_environment():
             except FileNotFoundError:
                 print("[Main] ERROR: mjpython not found. Install MuJoCo or disable QUBE_VISUALIZE in Config.yaml")
                 sys.exit(1)
-
+            """
 
 # ╔═══════════════════════════════════════════════════╗
 # ║                      THREADS                      ║

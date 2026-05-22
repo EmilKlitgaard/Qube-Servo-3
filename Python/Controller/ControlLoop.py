@@ -56,9 +56,9 @@ def on_target(theta: float, theta_dot: float, alpha: float, alpha_dot: float, th
     """
     
     # Define thresholds for being "on target"
-    theta_threshold = math.radians(2)       # 2 degrees
-    alpha_threshold = math.radians(2)       # 2 degrees
-    theta_dot_threshold = math.radians(5)   # 5 degrees/s
+    theta_threshold = math.radians(10)       # 2 degrees
+    alpha_threshold = math.radians(10)       # 2 degrees
+    theta_dot_threshold = math.radians(10)   # 5 degrees/s
     alpha_dot_threshold = math.radians(10)  # 10 degrees/s
     
     # Check if theta and alpha are within thresholds of target
@@ -149,6 +149,16 @@ def run_controller(qube: QubeInterface, logger: Logger, stop_event: threading.Ev
             
             # Apply control
             qube.write(voltage)
+
+            # Start timing only after the pendulum has actually fallen away from
+            # the upright state, then stop when it becomes upright again.
+            if hasattr(qube, "pendulum_recovery_armed"):
+                if qube.pendulum_recovery_armed and qube.pendulum_recovery_start_step is None:
+                    if not on_target(theta, theta_dot, alpha, alpha_dot, qube.target_theta, qube.target_alpha):
+                        qube.begin_pendulum_recovery_timing()
+
+                if on_target(theta, theta_dot, alpha, alpha_dot, qube.target_theta, qube.target_alpha):
+                    qube.finish_pendulum_recovery_timing()
             
             # Log data if logging enabled
             if logger is not None:

@@ -22,10 +22,12 @@ Following MuJoCo documentation best practices:
 import os
 import math
 import time
+import csv
 import mujoco
 import numpy as np
 
 from Config import config
+from datetime import datetime
 from typing import Tuple, Optional
 from control_platform import QubeInterface
 
@@ -40,6 +42,50 @@ def get_model_file_path() -> str:
     else:
         model_file = os.path.join(root_dir, "Virtual_model", "Qube_Servo_3.xml")
     return model_file
+
+
+class PendulumRecoveryCSVLogger:
+    """Append pendulum recovery measurements to a CSV file."""
+
+    def __init__(self, csv_path: str):
+        self.csv_path = csv_path
+        self.next_index = 1
+
+        os.makedirs(os.path.dirname(self.csv_path), exist_ok=True)
+
+        if os.path.exists(self.csv_path):
+            last_row = None
+            with open(self.csv_path, "r", newline="") as file:
+                for row in csv.reader(file):
+                    if row:
+                        last_row = row
+
+            if last_row and last_row[0].lower() != "index":
+                try:
+                    self.next_index = int(last_row[0]) + 1
+                except (ValueError, IndexError):
+                    self.next_index = 1
+        else:
+            with open(self.csv_path, "w", newline="") as file:
+                writer = csv.writer(file)
+                writer.writerow(["index", "step_count", "recovery_time_s", "timestamp"])
+
+    def log(self, step_count: int, timestep_s: float) -> int:
+        recovery_time_s = step_count * timestep_s
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        index = self.next_index
+
+        with open(self.csv_path, "a", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow([
+                index,
+                step_count,
+                f"{recovery_time_s:.6f}",
+                timestamp,
+            ])
+
+        self.next_index += 1
+        return index
 
 
 # ── Virtual Implementation ─────────────────────────────────────────────────────
@@ -82,6 +128,12 @@ class Virtual(QubeInterface):
         self.emf_constant = config.PLANT_MOTOR_CONSTANT         # Back EMF constant [V/(rad/s)]
         self.torque_constant = config.PLANT_MOTOR_CONSTANT      # Torque constant [Nm/V]
         self.motor_resistance = config.PLANT_MOTOR_RESISTANCE   # Motor resistance [Ohm]
+
+        # Simulation-step based recovery timing
+        self.sim_step_count = 0
+        self.pendulum_recovery_armed = False
+        self.pendulum_recovery_start_step = None
+        self.pendulum_recovery_logger = None
 
         if config.DEBUG: print("[Virtual] Simulator initialized")
     
@@ -135,6 +187,9 @@ class Virtual(QubeInterface):
             self.contact_force = np.zeros(6, dtype=np.float64)
             self.striker_dt = self.model.opt.timestep
 
+        self.sim_step_count = 0
+        self.pendulum_recovery_start_step = None
+
         # Step 5: Forward kinematics: Compute all body positions and orientations
         mujoco.mj_forward(self.model, self.data)
 
@@ -159,6 +214,44 @@ class Virtual(QubeInterface):
         print("[Virtual] MuJoCo simulator closed.")
 
 
+    def _get_recovery_csv_path(self) -> str:
+        root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        return os.path.join(root_dir, "logs", "pendulum_recovery_times.csv")
+
+
+    def _log_recovery_time(self, step_count: int) -> int:
+        if self.pendulum_recovery_logger is None:
+            self.pendulum_recovery_logger = PendulumRecoveryCSVLogger(self._get_recovery_csv_path())
+
+        return self.pendulum_recovery_logger.log(step_count, self.dt)
+
+
+    def begin_pendulum_recovery_timing(self) -> None:
+        """Start timing from the current simulation step."""
+        self.pendulum_recovery_start_step = self.sim_step_count
+
+
+    def finish_pendulum_recovery_timing(self) -> None:
+        """Log the elapsed simulation time if a recovery is currently being tracked."""
+        if self.pendulum_recovery_start_step is None:
+            return
+
+        step_count = self.sim_step_count - self.pendulum_recovery_start_step
+        if step_count < 0:
+            step_count = 0
+
+        sample_index = self._log_recovery_time(step_count)
+        recovery_time_s = step_count * self.dt
+
+        print(
+            f"Pendulum upright after {step_count} steps "
+            f"({recovery_time_s:.6f} s), logged sample #{sample_index}"
+        )
+
+        self.pendulum_recovery_start_step = None
+        self.pendulum_recovery_armed = False
+
+
     # ── Control interface ─────────────────────────────────────────────────────────
     def key_callback(self, key: int) -> None:
         # Backspace key: Reset simulation to initial state
@@ -171,6 +264,12 @@ class Virtual(QubeInterface):
         elif key == 257:  
             if config.DEBUG: print("[Virtual] Enter pressed, toggling motor enabled state...")
             self.enable(not self.enabled)
+
+            if not self.enabled:
+                # Arm timing; the controller will start it after the pendulum
+                # has actually left the upright state.
+                self.pendulum_recovery_armed = True
+                self.pendulum_recovery_start_step = None
 
         # Space key: Release striker (only for striker test)
         elif key == 32 and config.STRIKER_TEST_ENABLED:
@@ -205,6 +304,8 @@ class Virtual(QubeInterface):
 
         # Reset target time
         self.target_time = time.time()
+        self.sim_step_count = 0
+        self.pendulum_recovery_start_step = None
 
         # [OPTIONAL] Striker test: Set alpha and striker positions 
         if config.STRIKER_TEST_ENABLED:
@@ -387,6 +488,7 @@ class Virtual(QubeInterface):
             self.viewer.sync()
 
         # Update real-time timing with active catch-up
+        self.sim_step_count += 1
         self.run_time += self.dt
         self.target_time += self.tick_time
         self.sleep_time = self.target_time - time.time()

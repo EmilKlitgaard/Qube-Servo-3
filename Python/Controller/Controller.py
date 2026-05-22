@@ -30,7 +30,7 @@ class Controller:
         Default corresponds to reasonable values for the Qube.
     """
 
-    def __init__(self, lqr_k: list = [60.0, 5.0, 3.0, 3.0]):
+    def __init__(self, lqr_k: list = [37.1, 1.9, 4.3, 1]):
         self.k = lqr_k
         
         # Initialize swing-up controller
