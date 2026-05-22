@@ -14,9 +14,6 @@ from control_platform.Qube import Qube
 class AppInterface(ctk.CTk, ABC):
     """
     Abstract base class for GUI applications (Dashboard and Graph).
-    
-    Does NOT inherit from ctk.CTk. Instead creates the window lazily in init_dashboard()
-    to avoid conflicts with MuJoCo viewer during simulation.
     """
     
     def __init__(self, qube: Qube, logger: Logger, stop_event: threading.Event):        

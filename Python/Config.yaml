@@ -1,4 +1,4 @@
-DEBUG: true                     # Whether to enable debug mode (prints additional information)
+DEBUG: false                     # Whether to enable debug mode (prints additional information)
 
 GUI:
   ENABLED: false                 # Whether to enable the GUI (Only applies if VISUALIZE is false)

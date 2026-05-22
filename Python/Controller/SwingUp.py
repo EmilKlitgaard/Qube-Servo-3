@@ -1,15 +1,5 @@
 """
-SwingUp.py – State machine swing-up controller for the Qube-Servo 3.
-
-This module implements the swing-up phase of the control strategy using a
-multi-step state machine that follows these steps:
-
-1. Move arm to -90 degrees (theta = -π/2)
-2. Wait for pendulum swing to settle (alpha_dot < 5 degrees/s)
-3. Move arm to +10 degrees at max speed (theta = +10 degrees)
-4. Wait for pendulum to reach bottom (alpha = 0)
-5. Move arm back to center (theta = 0)
-6. Exit when pendulum reaches near upright (alpha between 135-225 degrees)
+SwingUp.py - State machine swing-up controller for the Qube-Servo 3.
 """
 
 import math
