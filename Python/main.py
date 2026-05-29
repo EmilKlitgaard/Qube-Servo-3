@@ -181,9 +181,6 @@ def main():
     try:
         # Start main app loop (GUI or Graph if enabled, otherwise just wait for stop event)
         if main_app is not None:
-            print("[Main] Starting main app loop...")            
-            main_app.run()
-
             # Initialize control loop in thread
             print("[Main] Initializing Control loop as thread...")
             controller_thread = threading.Thread(
@@ -193,6 +190,10 @@ def main():
                 daemon=True
             )
             controller_thread.start()
+
+            # Start GUI in main loop
+            print("[Main] Starting main app loop...")            
+            main_app.run()
         else:
             # Start control loop in main thread if no GUI (for simulation or headless mode)
             print("[Main] GUI disabled or running in simulation. Running control loop in main thread...")
