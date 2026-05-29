@@ -116,13 +116,13 @@ class Plotter:
 
         self.ax_theta_target.set_ylabel('Angle [deg]', fontsize=11, fontweight='bold', color='#c05621')
         self.ax_theta_target.tick_params(axis='y', labelcolor='#c05621')
-        self.ax_theta_target.set_title('Theta Target and Hit Delay', fontsize=12, fontweight='bold', color='#e2e8f0')
+        self.ax_theta_target.set_title('Theta Target', fontsize=12, fontweight='bold', color='#e2e8f0')
         self.ax_theta_target.axhline(y=0.0, color='#c05621', linestyle='--', alpha=0.4, linewidth=0.8)
         self.ax_theta_target.legend(loc='upper left', fontsize=9)
 
         self.ax_alpha.set_ylabel('Angle [deg]', fontsize=11, fontweight='bold', color='#2f855a')
         self.ax_alpha.tick_params(axis='y', labelcolor='#2f855a')
-        self.ax_alpha.set_title('Pendulum Angle α (Wrapped around 0/360)', fontsize=12, fontweight='bold', color='#e2e8f0')
+        self.ax_alpha.set_title('Pendulum Angle α (Wrapped at 2π)', fontsize=12, fontweight='bold', color='#e2e8f0')
         self.ax_alpha.axhline(y=-180.0, color='#718096', linestyle=':', alpha=0.5, linewidth=0.8)
         self.ax_alpha.set_ylim(-190.0, 190.0)
         self.ax_alpha.legend(loc='upper left', fontsize=9)
