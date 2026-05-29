@@ -129,6 +129,11 @@ def run_controller(qube: QubeInterface, logger: Logger, stop_event: threading.Ev
                 if config.DEBUG: print(f"[Control] Duration of {duration} s reached. Exiting control loop.")
                 break
 
+            # Pause mode: freeze control stepping and simulation time.
+            if qube.paused:
+                time.sleep(0.01)
+                continue
+
             # Check if viewer is still running
             if viewer is not None and not viewer.is_running():
                 if config.DEBUG: print("[Control] Viewer window closed.")
@@ -158,7 +163,9 @@ def run_controller(qube: QubeInterface, logger: Logger, stop_event: threading.Ev
                     theta_dot=theta_dot,
                     alpha=alpha,
                     alpha_dot=alpha_dot,
-                    voltage=voltage
+                    voltage=voltage,
+                    theta_target=qube.target_theta,
+                    alpha_target=qube.target_alpha
                 )
             
             # Update LED based on current state and mode

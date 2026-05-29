@@ -14,20 +14,24 @@ class Logger:
     def __init__(self) -> None:
         self.time_history = []
         self.theta_history = []
+        self.theta_target_history = []
         self.theta_dot_history = []
         self.alpha_history = []
+        self.alpha_target_history = []
         self.alpha_dot_history = []
         self.voltage_history = []
 
         if config.DEBUG: print("[Logger] Logger initialized.")
         
 
-    def log(self, time: float, theta: float, theta_dot: float, alpha: float, alpha_dot: float, voltage: float) -> None:
+    def log(self, time: float, theta: float, theta_dot: float, alpha: float, alpha_dot: float, voltage: float, theta_target: float = 0.0, alpha_target: float = 0.0) -> None:
         """Log a single timestep of simulation data."""
         self.time_history.append(time)
         self.theta_history.append(theta)
+        self.theta_target_history.append(theta_target)
         self.theta_dot_history.append(theta_dot)
         self.alpha_history.append(alpha)
+        self.alpha_target_history.append(alpha_target)
         self.alpha_dot_history.append(alpha_dot)
         self.voltage_history.append(voltage)
 
@@ -36,8 +40,10 @@ class Logger:
         """Clear all logged data."""
         self.time_history.clear()
         self.theta_history.clear()
+        self.theta_target_history.clear()
         self.theta_dot_history.clear()
         self.alpha_history.clear()
+        self.alpha_target_history.clear()
         self.alpha_dot_history.clear()
         self.voltage_history.clear()
 
@@ -52,8 +58,10 @@ class Logger:
         return {
             'time': self.time_history[start_index:],
             'theta': self.theta_history[start_index:],
+            'theta_target': self.theta_target_history[start_index:],
             'theta_dot': self.theta_dot_history[start_index:],
             'alpha': self.alpha_history[start_index:],
+            'alpha_target': self.alpha_target_history[start_index:],
             'alpha_dot': self.alpha_dot_history[start_index:],
             'voltage': self.voltage_history[start_index:]
         }
@@ -64,8 +72,10 @@ class Logger:
         return {
             'time': self.time_history,
             'theta': self.theta_history,
+            'theta_target': self.theta_target_history,
             'theta_dot': self.theta_dot_history,
             'alpha': self.alpha_history,
+            'alpha_target': self.alpha_target_history,
             'alpha_dot': self.alpha_dot_history,
             'voltage': self.voltage_history,
         }

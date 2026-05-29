@@ -26,6 +26,7 @@ class Dashboard(AppInterface):
         """Initialize Dashboard."""
         super().__init__(qube, logger, stop_event)
         self.motor_enabled = False
+        self.is_paused = False
 
         self.init_dashboard()  # Create the CTk window and panels
 
@@ -101,6 +102,19 @@ class Dashboard(AppInterface):
             command=self.toggle_motor
         )
         self.btn_motor.grid(row=1, column=0, padx=10, pady=5, sticky="ew")
+
+        # Pause/Resume simulation button (simulation only)
+        if config.QUBE_SIMULATION:
+            self.btn_pause_resume = ctk.CTkButton(
+                control_frame,
+                text="⏸ PAUSE SIMULATION",
+                font=ctk.CTkFont(size=12, weight="bold"),
+                fg_color="#b7791f",
+                hover_color="#975a16",
+                height=40,
+                command=self.toggle_pause
+            )
+            self.btn_pause_resume.grid(row=2, column=0, padx=10, pady=5, sticky="ew")
         
         # Reset button (simulation only)
         if config.QUBE_SIMULATION:
@@ -113,7 +127,19 @@ class Dashboard(AppInterface):
                 height=40,
                 command=self.reset_system
             )
-            self.btn_reset.grid(row=2, column=0, padx=10, pady=5, sticky="ew")
+            self.btn_reset.grid(row=3, column=0, padx=10, pady=5, sticky="ew")
+
+        # Clear graph history up to now
+        self.btn_clear_history = ctk.CTkButton(
+            control_frame,
+            text="🧹 CLEAR UNTIL NOW",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color="#4a5568",
+            hover_color="#2d3748",
+            height=40,
+            command=self.clear_until_now
+        )
+        self.btn_clear_history.grid(row=4, column=0, padx=10, pady=5, sticky="ew")
         
         # Status frame
         status_frame = ctk.CTkFrame(left_panel, corner_radius=8)
@@ -164,6 +190,21 @@ class Dashboard(AppInterface):
             text_color="#888888"
         )
         self.mode_indicator.grid(row=5, column=0, padx=10, pady=(0, 10), sticky="w")
+
+        if config.QUBE_SIMULATION:
+            ctk.CTkLabel(
+                status_frame,
+                text="Simulation:",
+                font=ctk.CTkFont(size=12, weight="bold")
+            ).grid(row=6, column=0, padx=10, pady=(5, 0), sticky="w")
+
+            self.status_sim = ctk.CTkLabel(
+                status_frame,
+                text="● RUNNING",
+                font=ctk.CTkFont(size=12),
+                text_color="#28a745"
+            )
+            self.status_sim.grid(row=7, column=0, padx=10, pady=(0, 10), sticky="w")
         
         # Config frame
         config_frame = ctk.CTkFrame(left_panel, corner_radius=8)
@@ -186,6 +227,8 @@ DT: {config.CONTROL_DT*1000:.1f}ms"""
     def start_control(self) -> None:
         """Start control loop."""
         self.qube.loop_running = True
+        self.is_paused = False
+        self.qube.set_paused(False)
         if config.DEBUG: print(f"[GUI] Start loop flag set to: {self.qube.loop_running}")
         self.btn_start_stop.grid_remove()   # Remove button after starting
         time.sleep(0.1)  # Small delay to ensure flag is set before control loop checks it
@@ -201,11 +244,49 @@ DT: {config.CONTROL_DT*1000:.1f}ms"""
     
     def reset_system(self) -> None:
         """Reset system state."""
+        self.is_paused = False
+        self.qube.set_paused(False)
         self.qube.reset()  # Reset the control platform (simulation only)
         self.qube.enabled = False
         self.update_status_display()
         self.logger.clear()  # Clear all logged data
         if config.DEBUG: print("[GUI] System reset triggered")
+
+
+    def clear_until_now(self) -> None:
+        """Clear logged history up to now and restart plot time from the current moment."""
+        if self.logger is None:
+            return
+
+        clear_time = self.qube.run_time
+        if self.logger.get_size() > 0:
+            clear_time = self.logger.time_history[-1]
+
+        self.logger.clear()
+
+        # Reset visible plot timeline so the next point appears near t=0.
+        self.timeline_max = config.CONTROL_DURATION if config.CONTROL_DURATION else 5.0
+        if self.plotter is not None:
+            self.plotter.timeline_max = self.timeline_max
+            self.plotter.set_time_offset(clear_time)
+            self.plotter.clear_plot()
+
+        if self.plot_canvas is not None:
+            self.plot_canvas.draw_idle()
+
+        if config.DEBUG:
+            print(f"[GUI] Cleared history at t={clear_time:.3f}s and reset plot origin")
+
+
+    def toggle_pause(self) -> None:
+        """Pause or resume simulation and control stepping."""
+        self.is_paused = not self.is_paused
+        self.qube.set_paused(self.is_paused)
+
+        if config.DEBUG:
+            print(f"[GUI] Simulation pause toggled: {'PAUSED' if self.is_paused else 'RUNNING'}")
+
+        self.update_status_display()
     
     
     def update_status_display(self) -> None:
@@ -223,6 +304,14 @@ DT: {config.CONTROL_DT*1000:.1f}ms"""
         else:
             self.status_motor.configure(text="● DISABLED", text_color="#888888")
             self.btn_motor.configure(text="⚡ ENABLE MOTOR", fg_color="#007bff", hover_color="#0056b3")
+
+        if config.QUBE_SIMULATION:
+            if self.is_paused:
+                self.status_sim.configure(text="● PAUSED", text_color="#b7791f")
+                self.btn_pause_resume.configure(text="▶ RESUME SIMULATION", fg_color="#2f855a", hover_color="#276749")
+            else:
+                self.status_sim.configure(text="● RUNNING", text_color="#28a745")
+                self.btn_pause_resume.configure(text="⏸ PAUSE SIMULATION", fg_color="#b7791f", hover_color="#975a16")
 
 
     def update(self) -> None:
@@ -255,6 +344,8 @@ DT: {config.CONTROL_DT*1000:.1f}ms"""
     def on_closing(self):
         """Handle window close event."""
         if config.DEBUG: print("[GUI] Dashboard close requested")
+        self.is_paused = False
+        self.qube.set_paused(False)
         self.stop_event.set()  # Signal all threads to stop
         self.qube.enable(False)  # Ensure motor is disabled
         self.update_status_display()

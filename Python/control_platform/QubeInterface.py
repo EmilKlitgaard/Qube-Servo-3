@@ -46,6 +46,7 @@ class QubeInterface(ABC):
 
         # Flag for starting control loop (used in GUI mode to wait for user input)
         self.loop_running = False
+        self.paused = False
 
         if config.DEBUG: print(f"[QubeInterface] Parrent class initialized...")
         
@@ -96,6 +97,19 @@ class QubeInterface(ABC):
         self.target_theta = theta
         self.target_alpha = alpha
         if config.DEBUG: print(f"[Virtual] New target: theta={math.degrees(theta):.1f}°, alpha={math.degrees(alpha):.1f}°")
+
+
+    def set_paused(self, on: bool) -> None:
+        """Pause or resume control stepping and keep simulation time frozen while paused."""
+        self.paused = bool(on)
+
+        # Reset scheduling baseline when resuming to avoid fast catch-up bursts.
+        if not self.paused:
+            self.target_time = time.time()
+
+        if config.DEBUG:
+            state = "PAUSED" if self.paused else "RUNNING"
+            print(f"[QubeInterface] Simulation state: {state}")
 
 
     @abstractmethod
