@@ -176,27 +176,12 @@ class Dashboard(AppInterface):
         )
         self.status_motor.grid(row=3, column=0, padx=10, pady=0, sticky="w")
         
-        # Mode indicator
-        ctk.CTkLabel(
-            status_frame,
-            text="Mode:",
-            font=ctk.CTkFont(size=12, weight="bold")
-        ).grid(row=4, column=0, padx=10, pady=(10, 0), sticky="w")
-        
-        self.mode_indicator = ctk.CTkLabel(
-            status_frame,
-            text="WAITING",
-            font=ctk.CTkFont(size=12),
-            text_color="#888888"
-        )
-        self.mode_indicator.grid(row=5, column=0, padx=10, pady=(0, 10), sticky="w")
-
         if config.QUBE_SIMULATION:
             ctk.CTkLabel(
                 status_frame,
                 text="Simulation:",
                 font=ctk.CTkFont(size=12, weight="bold")
-            ).grid(row=6, column=0, padx=10, pady=(5, 0), sticky="w")
+            ).grid(row=4, column=0, padx=10, pady=(10, 0), sticky="w")
 
             self.status_sim = ctk.CTkLabel(
                 status_frame,
@@ -204,7 +189,7 @@ class Dashboard(AppInterface):
                 font=ctk.CTkFont(size=12),
                 text_color="#28a745"
             )
-            self.status_sim.grid(row=7, column=0, padx=10, pady=(0, 10), sticky="w")
+            self.status_sim.grid(row=5, column=0, padx=10, pady=(0, 10), sticky="w")
         
         # Config frame
         config_frame = ctk.CTkFrame(left_panel, corner_radius=8)
@@ -323,9 +308,14 @@ DT: {config.CONTROL_DT*1000:.1f}ms"""
             # Get current max time from logger
             if self.logger.get_size() > 0:
                 current_time = self.logger.time_history[-1]
+
+                # Expand using display-time (offset corrected), not absolute runtime.
+                display_time = current_time - self.plotter.time_offset
+                if display_time < 0:
+                    display_time = 0.0
                 
                 # Expand timeline if needed (when reaching 95% of current max)
-                if current_time > self.timeline_max * 0.95:
+                if display_time > self.timeline_max * 0.95:
                     self.timeline_max *= 1.1  # Expand by 10%
                     self.plotter.timeline_max = self.timeline_max  # Update plotter
                     if config.DEBUG:

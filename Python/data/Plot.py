@@ -108,6 +108,8 @@ class Plotter:
 
         self.ax_theta.set_ylabel('Angle [deg]', fontsize=11, fontweight='bold', color='#2b6cb0')
         self.ax_theta.tick_params(axis='y', labelcolor='#2b6cb0')
+        self.ax_theta.ticklabel_format(axis='y', style='plain', useOffset=False)
+        self.ax_theta.yaxis.get_major_formatter().set_scientific(False)
         self.ax_theta.set_title('Arm Angle θ (Actual)', fontsize=12, fontweight='bold', color='#e2e8f0')
         self.ax_theta.axhline(y=0.0, color='#2b6cb0', linestyle='--', alpha=0.4, linewidth=0.8)
         self.ax_theta.legend(loc='upper left', fontsize=9)
