@@ -234,7 +234,7 @@ void lcd_task(void) {
                 last_system_mode = system_mode;
             } else if (system_mode == MODE_ENCODER && last_system_mode != MODE_ENCODER) {
                 clear_lcd();
-                write_str_at(0, 0, "System Running!.");
+                write_str_at(0, 0, "System Running!");
                 write_str_at(0, 1, "Encoder Mode");
                 last_system_mode = system_mode;
             }
