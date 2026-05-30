@@ -42,6 +42,7 @@
 #include "Encoder.h"
 #include "StateManager.h"
 #include "LedManager.h"
+#include "LCD.h"
 
 /*****************************    Defines    *******************************/
 #define USERTASK_STACK_SIZE     configMINIMAL_STACK_SIZE
@@ -62,10 +63,10 @@ static void init_hardware(void) {
     init_print();
     
     // Initialize hardware modules
+    init_button_handler();
     init_numpad();
     init_potentiometer();
     init_encoder();
-    init_button_handler();
     
     // Initialize state manager
     init_state_manager();
@@ -82,10 +83,12 @@ int main(void) {
     // Create FreeRTOS Tasks:
     print_str("Creating tasks...");
     xTaskCreate(button_task, "Button", USERTASK_STACK_SIZE, NULL, HIGH_PRIO, NULL);                     // Button task - handles button presses and state changes   
-    xTaskCreate(led_manager_task, "LED_Manager", USERTASK_STACK_SIZE, NULL, LOW_PRIO, NULL);            // LED Manager task - handles status blinking and mode color indication
     xTaskCreate(numpad_task, "Numpad", USERTASK_STACK_SIZE * 2, NULL, MED_PRIO, NULL);                  // Numpad input task - scan and process numpad
     xTaskCreate(potentiometer_task, "Potentiometer", USERTASK_STACK_SIZE * 2, NULL, MED_PRIO, NULL);    // Potentiometer input task - read and process potentiometer
     xTaskCreate(encoder_task, "Encoder", USERTASK_STACK_SIZE * 2, NULL, MED_PRIO, NULL);                // Encoder input task - read and process encoder
+    xTaskCreate(led_manager_task, "LED_Manager", USERTASK_STACK_SIZE, NULL, LOW_PRIO, NULL);            // LED Manager task - handles status blinking and mode color indication
+    xTaskCreate(lcd_task, "LCD", USERTASK_STACK_SIZE * 2, NULL, LOW_PRIO, NULL);                        // LCD task - manage LCD display
+    
     // Start the FreeRTOS scheduler
     print_str("Starting scheduler...\n");
     vTaskStartScheduler();
