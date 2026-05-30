@@ -11,16 +11,16 @@ SPECIFICATION_TEST:
   ENABLED: false                # Meassures the rise-time, settling time and overshoot (only applies if SIMULATION is true)
 
 GUI:
-  ENABLED: true                 # Whether to enable the GUI (Only applies if VISUALIZE is false)
+  ENABLED: false                 # Whether to enable the GUI (Only applies if VISUALIZE is false)
   UPDATE_RATE: 100              # GUI update rate in Hz (only applies if ENABLED is true)
 
 UART:
-  PORT: COM3
+  PORT: /dev/cu.usbmodem0E21E64D1
   BAUDRATE: 230400
 
 QUBE:
   SIMULATION: true              # Whether to use MuJoCo simulation (true) or real hardware (false)
-  VISUALIZE: false              # Whether to launch MuJoCo viewer (only applies if SIMULATION is true)
+  VISUALIZE: true              # Whether to launch MuJoCo viewer (only applies if SIMULATION is true)
   SIMULATION_SPEED: 1.0         # 1.0 = real time, 0.5 = half speed
 
 CONTROL:
